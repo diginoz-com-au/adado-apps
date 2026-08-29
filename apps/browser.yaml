@@ -1,0 +1,22 @@
+id: adado-browser
+name: AdaDo Browser
+description: Containerized Playwright browser agent — enables any app agent to automate web tasks, fill forms, extract data, and control websites.
+category: core
+icon: 🌐
+source_repo: https://github.com/diginoz-com-au/adado-browser
+upstream: microsoft/playwright-python
+docker_profile: browser
+port: 8765
+agent:
+  id: browser-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Provides browser automation to other agents — not user-facing
+  capabilities:
+    - navigate to any URL
+    - click, fill, extract from pages
+    - take screenshots
+    - run JavaScript in page context
+  api_base: http://localhost:8765
+install_cmd: docker compose --profile browser up -d
+uninstall_cmd: docker compose --profile browser down
+notes: Core infrastructure. Install this first if any agent needs web automation.
