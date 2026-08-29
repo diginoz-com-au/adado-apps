@@ -1,0 +1,25 @@
+id: adado-writing
+name: Writing Studio
+description: Let Ada draft, edit, and collaborate on documents in OnlyOffice — the open-source Office 365 that lives on your server.
+category: productivity
+market_leader: "OnlyOffice"
+homepage_tile: true
+icon: ✍️
+upstream: https://github.com/outline/outline
+docker_profile: writing
+port: 3000
+tier_required: cloud
+agent:
+  id: writing-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Creates, edits, and organises documents, wikis, and long-form writing
+  capabilities:
+    - Create a new document or wiki page
+    - Search across all your documents
+    - Summarise or expand on existing content
+    - Draft an email, proposal, or report from a brief
+    - Organise documents into collections
+    - Suggest improvements to a piece of writing
+    - Export to Markdown or PDF
+install_cmd: docker compose --profile writing up -d
+uninstall_cmd: docker compose --profile writing down

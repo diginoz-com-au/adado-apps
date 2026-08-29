@@ -1,20 +1,25 @@
 id: adado-ai
-name: AdaDo AI
-description: Visual AI workflow engine for building LLM-powered apps and agents.
+name: AdaDo AI Studio
+description: Let Ada query any local or cloud LLM through Open WebUI — the open-source AI interface.
 category: AI workflow engine
+market_leader: "Open WebUI"
+homepage_tile: true
 icon: 🧠
-source_repo: https://github.com/diginoz-com-au/adado-ai
 upstream: https://github.com/langgenius/dify
 docker_profile: ai
 port: 80
+tier_required: cli
 agent:
   id: ai-agent
   model: claude-cli/claude-haiku-4-5-20251001
   description: Builds and runs AI workflows, chatbots, and knowledge-base applications
   capabilities:
-    - Create and configure AI workflow pipelines
-    - Manage knowledge bases and document ingestion
-    - Monitor LLM usage, costs, and performance metrics
+    - Create and configure an AI workflow pipeline
+    - Add documents to a knowledge base for RAG
+    - Monitor LLM usage and costs per workflow
+    - Test and iterate on prompts and chains
+    - Deploy a custom AI chatbot for a specific domain
+    - Report on workflow execution metrics
   api_base: http://localhost:80/api
 install_cmd: docker compose --profile ai up -d
 uninstall_cmd: docker compose --profile ai down

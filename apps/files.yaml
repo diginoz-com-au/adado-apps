@@ -1,20 +1,27 @@
 id: adado-files
 name: AdaDo Files
-description: Self-hosted file cloud with sync, sharing, and collaboration features.
+description: Let Ada upload, share, and organise files in Nextcloud — your own file cloud, no Google Drive or Dropbox needed.
 category: file cloud
+market_leader: "Nextcloud"
+homepage_tile: true
 icon: ☁️
-source_repo: https://github.com/diginoz-com-au/adado-files
 upstream: https://github.com/nextcloud/server
 docker_profile: files
 port: 80
+tier_required: cloud
 agent:
   id: files-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Manages file storage, shares, and user quotas in Nextcloud
+  description: Manages your file cloud — finds files, manages shares, and monitors storage
   capabilities:
-    - List, upload, and share files and folders
-    - Manage user accounts and storage quotas
-    - Report storage usage and recent file activity
+    - Find a file by name or type
+    - Create and manage a shared folder or link
+    - Report storage usage and who is using what
+    - Manage user accounts and quotas
+    - Alert on files shared publicly that shouldn't be
+    - List recent file activity
   api_base: http://localhost:80/api
 install_cmd: docker compose --profile files up -d
 uninstall_cmd: docker compose --profile files down
+setup_guide: |
+  Install the Nextcloud desktop or mobile app and point it at your AdaDo instance URL. Files sync automatically across all devices.

@@ -1,20 +1,26 @@
 id: adado-git
 name: AdaDo Git
-description: Lightweight self-hosted Git service with issue tracker and CI/CD support.
-category: self-hosted git
+description: Let Ada create repos, review pull requests, and manage issues in Gitea — self-hosted GitHub, on your terms.
+category: development
+market_leader: "Gitea"
+homepage_tile: true
 icon: 🔀
-source_repo: https://github.com/diginoz-com-au/adado-git
 upstream: https://github.com/go-gitea/gitea
 docker_profile: git
 port: 3000
+tier_required: cli
 agent:
   id: git-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Manages repositories, issues, pull requests, and CI pipelines in Gitea
+  description: Manages your code repositories, issues, and development workflow
   capabilities:
-    - List and create repositories, branches, and pull requests
-    - Query open issues and recent commits
-    - Manage users, teams, and organisation settings
+    - List repositories and recent commit activity
+    - Create a new repository or branch
+    - Show open pull requests and their review status
+    - Query open issues and filter by label or assignee
+    - Summarise recent commits and changes
+    - Alert on failed CI runs
+    - Manage team members and repository permissions
   api_base: http://localhost:3000/api
 install_cmd: docker compose --profile git up -d
 uninstall_cmd: docker compose --profile git down

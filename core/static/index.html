@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdaDo</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<style>
+  :root {
+    --bg: #0d0c14;
+    --surface: #16141f;
+    --surface2: #1e1b2e;
+    --border: #2a2540;
+    --accent: #6e5bf0;
+    --accent-dim: #4d3fb5;
+    --text: #f0eeff;
+    --muted: #8b80c0;
+    --user-bubble: #2a2256;
+    --ada-bubble: #1e1b2e;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #a78bfa, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .topbar-right { display: flex; gap: 0.5rem; align-items: center; }
+  .btn-sm {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--accent); color: var(--text); }
+  .btn-sm.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-sm.primary:hover { background: var(--accent-dim); }
+
+  /* ── Main layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    padding: 0.75rem 1rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .app-list { flex: 1; overflow-y: auto; padding-bottom: 1rem; }
+  .app-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 0.88rem;
+    border-radius: 0;
+    color: var(--muted);
+  }
+  .app-item:hover, .app-item.active { background: var(--surface2); color: var(--text); }
+  .app-item .app-emoji { font-size: 1rem; width: 1.2rem; text-align: center; }
+  .sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem 0.6rem;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: -0.01em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  }
+  .sidebar-chat-btn {
+    margin: 0.75rem;
+    padding: 0.6rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    width: calc(100% - 1.5rem);
+    text-align: center;
+  }
+  .sidebar-chat-btn:hover { background: var(--accent-dim); }
+
+  /* ── Chat area ── */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .msg {
+    display: flex;
+    gap: 0.75rem;
+    max-width: 72%;
+    animation: fadeIn 0.2s ease;
+  }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg.ada { align-self: flex-start; }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .msg.ada .avatar { background: var(--accent); border-color: var(--accent); }
+
+  .bubble {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    line-height: 1.6;
+    font-size: 0.92rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .bubble { background: var(--user-bubble); border-radius: var(--radius) 4px var(--radius) var(--radius); }
+  .msg.ada .bubble  { background: var(--ada-bubble); border: 1px solid var(--border); border-radius: 4px var(--radius) var(--radius) var(--radius); }
+
+  .typing-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: blink 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  /* ── Input ── */
+  .input-row {
+    padding: 1rem 1.5rem 1.25rem;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+  }
+  .input-wrap { flex: 1; position: relative; }
+  textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.92rem;
+    padding: 0.8rem 1rem;
+    resize: none;
+    min-height: 44px;
+    max-height: 160px;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+  .send-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    cursor: pointer;
+    padding: 0.65rem 1rem;
+    font-size: 1.1rem;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    align-self: flex-end;
+  }
+  .send-btn:hover:not(:disabled) { background: var(--accent-dim); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Auth modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    width: 360px;
+    max-width: 90vw;
+  }
+  .modal h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.3rem; }
+  .modal p { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; font-weight: 500; }
+  .field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.92rem;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .modal-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0.75rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: background 0.15s;
+  }
+  .modal-btn:hover { background: var(--accent-dim); }
+  .modal-switch {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.84rem;
+    color: var(--muted);
+  }
+  .modal-switch a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .modal-err { color: #f87171; font-size: 0.82rem; margin-top: 0.5rem; text-align: center; }
+
+  /* ── Welcome state ── */
+  .welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    text-align: center;
+  }
+  .welcome-icon { display:flex; justify-content:center; margin-bottom:0.5rem; }
+  .welcome h2 { font-size: 1.6rem; font-weight: 800; }
+  .welcome p { color: var(--muted); max-width: 380px; line-height: 1.6; }
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 0.5rem;
+    max-width: 480px;
+  }
+  .suggestion {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.84rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suggestion:hover { border-color: var(--accent); color: var(--text); }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Markdown in Ada bubbles ── */
+  .bubble h1,.bubble h2,.bubble h3 { font-weight:700; margin:0.75rem 0 0.25rem; }
+  .bubble h1 { font-size:1.1rem; }
+  .bubble h2 { font-size:1rem; }
+  .bubble h3 { font-size:0.95rem; }
+  .bubble p { margin:0.4rem 0; }
+  .bubble ul,.bubble ol { padding-left:1.4rem; margin:0.4rem 0; }
+  .bubble li { margin:0.2rem 0; }
+  .bubble code { background:rgba(255,255,255,0.07); border-radius:4px; padding:0.1em 0.35em; font-family:monospace; font-size:0.87em; }
+  .bubble pre { background:rgba(255,255,255,0.05); border-radius:8px; padding:0.75rem 1rem; overflow-x:auto; margin:0.5rem 0; }
+  .bubble pre code { background:none; padding:0; }
+  .bubble strong { font-weight:700; }
+  .bubble em { font-style:italic; }
+  .bubble hr { border:none; border-top:1px solid var(--border); margin:0.75rem 0; }
+  .bubble blockquote { border-left:3px solid var(--accent); padding-left:0.75rem; color:var(--muted); margin:0.4rem 0; }
+  .bubble a { color:var(--accent); text-decoration:underline; }
+
+  /* ── Trial / usage badge ── */
+  .trial-badge {
+    background: rgba(110,91,240,0.15);
+    border: 1px solid rgba(110,91,240,0.4);
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    color: #a78bfa;
+    font-weight: 600;
+  }
+  .trial-badge.warn { background:rgba(239,68,68,0.12); border-color:rgba(239,68,68,0.4); color:#fca5a5; }
+
+  /* ── Usage panel ── */
+  .usage-panel {
+    position: fixed; top: 55px; right: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    width: 280px;
+    z-index: 50;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: none;
+    animation: fadeIn 0.15s ease;
+  }
+  .usage-panel.open { display: block; }
+  .usage-row { display:flex; justify-content:space-between; font-size:0.82rem; padding:0.3rem 0; color:var(--muted); }
+  .usage-row strong { color: var(--text); }
+  .usage-title { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:0.5rem; }
+
+  /* ── App tiles in welcome ── */
+  .app-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-top: 1rem;
+    max-width: 480px;
+    width: 100%;
+  }
+  .app-tile {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.65rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .app-tile:hover { border-color:var(--accent); color:var(--text); background:rgba(110,91,240,0.08); }
+  .app-tile .tile-icon { font-size:1rem; flex-shrink:0; }
+
+  /* ── Onboarding wizard ── */
+  .onboard-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .onboard-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    width: 460px;
+    max-width: 92vw;
+    position: relative;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+  }
+  .onboard-logo { display:flex; align-items:center; gap:0.6rem; margin-bottom:1.5rem; }
+  .onboard-logo span { font-weight:800; font-size:1.1rem; background:linear-gradient(135deg,#a78bfa,var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .onboard-step { display: none; }
+  .onboard-step.active { display: block; animation: fadeIn 0.25s ease; }
+  .onboard-step h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.4rem; }
+  .onboard-step .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.75rem; line-height: 1.5; }
+  .onboard-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: var(--font);
+    margin-bottom: 1.5rem;
+  }
+  .onboard-input:focus { border-color: var(--accent); }
+  .onboard-input::placeholder { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .chip {
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+  .chip.selected { background: rgba(110,91,240,0.2); border-color: var(--accent); color: var(--text); }
+  .onboard-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none; border-radius: 12px;
+    color: white; font-size: 1rem; font-weight: 700;
+    padding: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .onboard-btn:hover { background: var(--accent-dim); }
+  .onboard-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .onboard-skip { text-align:center; margin-top:0.75rem; font-size:0.82rem; color:var(--muted); cursor:pointer; }
+  .onboard-skip:hover { color: var(--text); }
+  .onboard-prog { display:flex; gap:0.4rem; justify-content:center; margin-bottom:1.5rem; }
+  .onboard-dot { width:6px; height:6px; border-radius:50%; background:var(--border); transition:background 0.2s; }
+  .onboard-dot.active { background:var(--accent); }
+  .done-icon { text-align:center; font-size:3rem; margin-bottom:1rem; }
+  .done-h { font-size:1.6rem; font-weight:800; text-align:center; margin-bottom:0.5rem; }
+  .done-sub { color:var(--muted); text-align:center; font-size:0.9rem; line-height:1.6; margin-bottom:1.75rem; }
+  select.onboard-input { cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="32" height="32" style="flex-shrink:0">
+      <defs>
+        <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#6e5bf0"/>
+          <stop offset="100%" style="stop-color:#a78bfa"/>
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="10" fill="#16141f"/>
+      <polygon points="24,8 38,40 10,40" fill="none" stroke="url(#lg)" stroke-width="3.5" stroke-linejoin="round"/>
+      <line x1="15" y1="31" x2="33" y2="31" stroke="url(#lg)" stroke-width="3"/>
+      <circle cx="38" cy="9" r="4.5" fill="#6e5bf0"/>
+    </svg>
+    <span>AdaDo</span>
+  </div>
+  <div class="topbar-right">
+    <span id="trial-badge" class="trial-badge" style="display:none"></span>
+    <button class="btn-sm" id="usage-btn" onclick="toggleUsage()" style="display:none" title="AI usage & costs">💰</button>
+    <span id="user-name" style="font-size:0.85rem;color:var(--muted)"></span>
+    <button class="btn-sm" id="auth-btn" onclick="showAuth()">Sign in</button>
+  </div>
+</div>
+
+<!-- Usage panel -->
+<div class="usage-panel" id="usage-panel">
+  <div class="usage-title">AI Usage Today</div>
+  <div class="usage-row"><span>Tokens used</span><strong id="u-tokens">—</strong></div>
+  <div class="usage-row"><span>Cost today</span><strong id="u-daily">—</strong></div>
+  <div class="usage-row"><span>Cost this month</span><strong id="u-monthly">—</strong></div>
+  <div class="usage-row" id="u-limit-row" style="display:none"><span>Daily limit</span><strong id="u-limit">—</strong></div>
+  <hr style="border-color:var(--border);margin:0.6rem 0;">
+  <div style="font-size:0.78rem;color:var(--muted)">All conversations are private and encrypted. Your data is never used for AI training.</div>
+</div>
+
+<!-- Main layout -->
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/logo.svg" width="20" height="20" alt="">
+      <span>AdaDo</span>
+    </div>
+    <button class="sidebar-chat-btn" onclick="openChat()">💬 Chat with Ada</button>
+    <div class="sidebar-section">App Library</div>
+    <div class="app-list" id="app-list">
+      <!-- populated by JS -->
+    </div>
+  </aside>
+
+  <!-- Chat area -->
+  <main class="chat-area">
+    <div class="messages" id="messages">
+      <!-- Welcome state -->
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="64" height="64">
+            <defs>
+              <linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#6e5bf0"/>
+                <stop offset="100%" style="stop-color:#a78bfa"/>
+              </linearGradient>
+            </defs>
+            <rect width="48" height="48" rx="14" fill="#1e1b2e"/>
+            <polygon points="24,7 39,41 9,41" fill="none" stroke="url(#wg)" stroke-width="3.5" stroke-linejoin="round"/>
+            <line x1="14" y1="31" x2="34" y2="31" stroke="url(#wg)" stroke-width="3"/>
+            <circle cx="39" cy="8" r="5" fill="#6e5bf0"/>
+          </svg>
+        </div>
+        <h2 id="welcome-h">What do you need done?</h2>
+        <p>Just say it in plain English. Ada handles the rest — no setup, no docs, no learning curve.</p>
+        <div class="suggestions">
+          <span class="suggestion" onclick="sendSuggestion(this)">What's on my plate today?</span>
+          <span class="suggestion" onclick="sendSuggestion(this)">Check my recent emails</span>
+          <span class="suggestion" onclick="sendSuggestion(this)">Add a task to my projects</span>
+          <span class="suggestion" onclick="sendSuggestion(this)">How's my budget looking?</span>
+          <span class="suggestion" onclick="sendSuggestion(this)">What can Ada do?</span>
+          <span class="suggestion" onclick="sendSuggestion(this)">Summarise my week</span>
+        </div>
+        <div style="font-size:0.72rem;color:var(--muted);text-align:left;margin:1rem 0 0.4rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Your App Library — market-leading tools, each with its own Ada agent. Click Add to enable.</div>
+        <div class="app-tiles" id="welcome-tiles"><!-- populated by JS --></div>
+      </div>
+    </div>
+    <div class="input-row">
+      <div class="input-wrap">
+        <textarea id="input" placeholder="Message Ada… (or tap 🎤)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="send-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input" style="background:var(--surface2);border:1px solid var(--border);font-size:1.1rem;">🎤</button>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+    </div>
+    <p style="text-align:center;font-size:0.72rem;color:var(--muted);padding:0.35rem 1rem 0.5rem;flex-shrink:0;">Ada is powered by AI. Conversations are private and never used for training.</p>
+  </main>
+</div>
+
+<!-- Onboarding wizard -->
+<div class="onboard-overlay" id="onboard-overlay" style="display:none">
+  <div class="onboard-card">
+    <div class="onboard-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="28" height="28">
+        <defs><linearGradient id="og" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6e5bf0"/><stop offset="100%" style="stop-color:#a78bfa"/></linearGradient></defs>
+        <rect width="48" height="48" rx="10" fill="#1e1b2e"/>
+        <polygon points="24,8 38,40 10,40" fill="none" stroke="url(#og)" stroke-width="3.5" stroke-linejoin="round"/>
+        <line x1="15" y1="31" x2="33" y2="31" stroke="url(#og)" stroke-width="3"/>
+        <circle cx="38" cy="9" r="4.5" fill="#6e5bf0"/>
+      </svg>
+      <span>AdaDo</span>
+    </div>
+    <div class="onboard-prog">
+      <div class="onboard-dot active" id="dot-0"></div>
+      <div class="onboard-dot" id="dot-1"></div>
+      <div class="onboard-dot" id="dot-2"></div>
+    </div>
+
+    <!-- Step 1: Role -->
+    <div class="onboard-step active" id="ob-step-0">
+      <h2>What do you do?</h2>
+      <p class="sub">Ada personalises everything to you. This takes 30 seconds.</p>
+      <input class="onboard-input" id="ob-role" type="text" placeholder="e.g. student, freelancer, small business owner…">
+      <button class="onboard-btn" onclick="obNext(1)">Next →</button>
+      <div class="onboard-skip" onclick="obSkip()">Skip setup — I'll do it later</div>
+    </div>
+
+    <!-- Step 2: Use cases -->
+    <div class="onboard-step" id="ob-step-1">
+      <h2>What do you want Ada to help with?</h2>
+      <p class="sub">Pick everything that applies. Ada will focus here.</p>
+      <div class="chips" id="ob-chips">
+        <div class="chip" onclick="toggleChip(this)" data-val="Projects">📋 Projects</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Finance">💰 Finance</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Email">📧 Email</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Research">🔍 Research</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Writing">✍️ Writing</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Home Automation">🏠 Home Automation</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Health">🏥 Health</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Social Media">📱 Social Media</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Documents">📄 Documents</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Code & Dev">💻 Code & Dev</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Trading">📈 Trading</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Business">🏢 Business</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="General Productivity">⚡ General Productivity</div>
+      </div>
+      <select class="onboard-input" id="ob-exp">
+        <option value="beginner">New to AI — explain things simply</option>
+        <option value="intermediate" selected>Familiar with AI — be efficient</option>
+        <option value="advanced">Experienced AI user — be terse</option>
+      </select>
+      <button class="onboard-btn" onclick="obNext(2)">Next →</button>
+    </div>
+
+    <!-- Step 3: Goals -->
+    <div class="onboard-step" id="ob-step-2">
+      <h2>Anything Ada should know?</h2>
+      <p class="sub">Optional context that helps Ada calibrate to you. Any detail is fine.</p>
+      <textarea class="onboard-input" id="ob-goals" rows="4" placeholder="e.g. I run a small business from home, I have ADHD, I'm building a startup, I'm studying part-time…" style="resize:none;line-height:1.5;"></textarea>
+      <button class="onboard-btn" id="ob-finish-btn" onclick="doOnboard()">Start using Ada →</button>
+    </div>
+
+    <!-- Done -->
+    <div class="onboard-step" id="ob-done">
+      <div class="done-icon">⚡</div>
+      <div class="done-h">Ada is ready.</div>
+      <div class="done-sub">Everything is set up for you. Just start talking — Ada will figure out the rest.</div>
+      <button class="onboard-btn" onclick="closeOnboard()">Let's go →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth modal -->
+<div class="modal-overlay" id="auth-modal" style="display:none">
+  <div class="modal">
+    <h2 id="auth-title">Sign in</h2>
+    <p id="auth-sub">Your AI assistant is waiting.</p>
+    <div class="field" id="name-field" style="display:none">
+      <label>Your name</label>
+      <input type="text" id="name-input" placeholder="Dan">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email-input" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAuth()">
+    </div>
+    <div class="modal-err" id="auth-err"></div>
+    <button class="modal-btn" onclick="doAuth()" id="auth-submit">Sign in</button>
+    <div class="modal-switch">
+      <span id="auth-switch-text">Don't have an account?</span>
+      <a onclick="toggleAuth()" id="auth-switch-link">Create one</a>
+    </div>
+    <div style="text-align:center;margin-top:0.75rem">
+      <a onclick="closeAuth()" style="font-size:0.82rem;color:var(--muted);cursor:pointer">Continue as guest</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let ws = null;
+let streaming = false;
+let streamBubble = null;
+let isSignup = false;
+let token = localStorage.getItem('adado_token');
+let userName = localStorage.getItem('adado_name');
+let _appsCache = [];
+
+// ─── Markdown renderer ───────────────────────────────────────────────────────
+function renderMarkdown(text) {
+  let s = text
+    // code blocks
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code>${escapeHtml(code.trim())}</code></pre>`)
+    // inline code
+    .replace(/`([^`]+)`/g, (_, c) => `<code>${escapeHtml(c)}</code>`)
+    // headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // bold + italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // horizontal rule
+    .replace(/^---$/gm, '<hr>')
+    // blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // unordered list (convert lines)
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    // ordered list
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // wrap consecutive <li> in <ul>
+    .replace(/(<li>[\s\S]*?<\/li>)(?=\s*<li>|$)/g, m => m)
+    // links
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // paragraphs — wrap non-tag lines
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (/^<(h[1-3]|pre|ul|ol|li|hr|blockquote|p)/.test(trimmed)) return trimmed;
+      return `<p>${trimmed}</p>`;
+    })
+    .join('\n');
+
+  // Wrap consecutive <li> tags in <ul>
+  s = s.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
+  return s;
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadApps();
+  updateAuthUI();
+  connectWS();
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#usage-panel') && !e.target.closest('#usage-btn')) {
+      document.getElementById('usage-panel').classList.remove('open');
+    }
+  });
+});
+
+function updateAuthUI() {
+  const btn = document.getElementById('auth-btn');
+  const nameEl = document.getElementById('user-name');
+  const trialBadge = document.getElementById('trial-badge');
+  const usageBtn = document.getElementById('usage-btn');
+  if (token && userName) {
+    nameEl.textContent = userName;
+    btn.textContent = 'Sign out';
+    btn.onclick = signOut;
+    usageBtn.style.display = '';
+    // Load trial + usage data
+    fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json()).then(me => {
+        const wh = document.getElementById('welcome-h');
+        if (me.name && wh) wh.textContent = `Hi ${me.name.split(' ')[0]}. What do you need done?`;
+        if (me.trial_active) {
+          const d = me.trial_days_left;
+          trialBadge.style.display = '';
+          trialBadge.textContent = d <= 1 ? `Trial ends today` : `${d}d trial left`;
+          trialBadge.className = d <= 2 ? 'trial-badge warn' : 'trial-badge';
+        } else {
+          trialBadge.style.display = 'none';
+        }
+      }).catch(() => {});
+  } else {
+    nameEl.textContent = '';
+    btn.textContent = 'Sign in';
+    btn.onclick = showAuth;
+    trialBadge.style.display = 'none';
+    usageBtn.style.display = 'none';
+  }
+}
+
+async function toggleUsage() {
+  const panel = document.getElementById('usage-panel');
+  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  try {
+    const res = await fetch('/api/usage/summary', { headers: { 'Authorization': `Bearer ${token}` } });
+    const d = await res.json();
+    const todayTokens = (d.today || []).reduce((a, r) => a + (r.i||0) + (r.o||0), 0);
+    document.getElementById('u-tokens').textContent = todayTokens.toLocaleString();
+    document.getElementById('u-daily').textContent = `$${(d.daily_spent || 0).toFixed(4)}`;
+    document.getElementById('u-monthly').textContent = `$${(d.monthly_spent || 0).toFixed(4)}`;
+    if (d.daily_limit) {
+      document.getElementById('u-limit-row').style.display = '';
+      document.getElementById('u-limit').textContent = `$${d.daily_limit.toFixed(2)}`;
+    }
+  } catch(e) {}
+  panel.classList.add('open');
+}
+
+// ─── WebSocket ───────────────────────────────────────────────────────────────
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const params = token ? `?token=${token}` : '';
+  ws = new WebSocket(`${proto}://${location.host}/ws/chat${params}`);
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ready') {
+      if (token && msg.onboarding_complete === false) {
+        showOnboarding();
+      }
+      return;
+    }
+    if (msg.type === 'start') {
+      streaming = true;
+      streamBubble = addBubble('ada', '');
+      document.getElementById('send-btn').disabled = true;
+    } else if (msg.type === 'chunk') {
+      if (streamBubble) {
+        streamBubble.textContent += msg.content;
+        scrollBottom();
+      }
+    } else if (msg.type === 'done') {
+      streaming = false;
+      finaliseAdaBubble(streamBubble);
+      streamBubble = null;
+      document.getElementById('send-btn').disabled = false;
+    } else if (msg.type === 'error') {
+      addBubble('ada', '⚠️ ' + msg.content);
+      document.getElementById('send-btn').disabled = false;
+    }
+  };
+
+  ws.onclose = () => {
+    setTimeout(connectWS, 2000);
+  };
+}
+
+// ─── Messaging ───────────────────────────────────────────────────────────────
+function sendMessage() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text || streaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+  hideWelcome();
+  addBubble('user', text);
+  input.value = '';
+  autoResize(input);
+
+  ws.send(JSON.stringify({ content: text }));
+}
+
+// ─── Voice input ──────────────────────────────────────────────────────────────
+let recognition = null;
+let listening = false;
+
+function toggleVoice() {
+  const btn = document.getElementById('mic-btn');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    btn.title = 'Voice not supported in this browser';
+    btn.textContent = '🚫';
+    return;
+  }
+  if (listening) {
+    recognition && recognition.stop();
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-AU';
+
+  const input = document.getElementById('input');
+  recognition.onstart = () => {
+    listening = true;
+    btn.textContent = '🔴';
+    btn.style.background = 'rgba(239,68,68,0.2)';
+    btn.style.borderColor = '#ef4444';
+  };
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    input.value = transcript;
+    autoResize(input);
+  };
+  recognition.onend = () => {
+    listening = false;
+    btn.textContent = '🎤';
+    btn.style.background = 'var(--surface2)';
+    btn.style.borderColor = 'var(--border)';
+    if (input.value.trim()) sendMessage();
+  };
+  recognition.onerror = () => { recognition.stop(); };
+  recognition.start();
+}
+
+function sendSuggestion(el) {
+  const text = el.textContent;
+  document.getElementById('input').value = text;
+  sendMessage();
+}
+
+function addBubble(role, text) {
+  const msgs = document.getElementById('messages');
+  const msg = document.createElement('div');
+  msg.className = `msg ${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (role === 'ada' && text) {
+    bubble.innerHTML = renderMarkdown(text);
+  } else {
+    bubble.textContent = text;
+  }
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'ada' ? '⚡' : '👤';
+  msg.appendChild(avatar);
+  msg.appendChild(bubble);
+  msgs.appendChild(msg);
+  scrollBottom();
+  return bubble;
+}
+
+function finaliseAdaBubble(bubble) {
+  if (bubble && bubble.classList.contains('bubble')) {
+    const rawText = bubble.textContent;
+    bubble.innerHTML = renderMarkdown(rawText);
+    scrollBottom();
+  }
+}
+
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function scrollBottom() {
+  const msgs = document.getElementById('messages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function openChat() {
+  document.getElementById('input').focus();
+}
+
+// ─── Apps ────────────────────────────────────────────────────────────────────
+async function loadApps() {
+  try {
+    const res = await fetch('/api/apps');
+    const apps = await res.json();
+    _appsCache = apps;
+    const list = document.getElementById('app-list');
+    list.innerHTML = '';
+    const allApps = apps.length > 0 ? apps : [
+      { icon: '💬', name: 'Chat' }, { icon: '📋', name: 'Projects' },
+      { icon: '🔒', name: 'Passwords' }, { icon: '💰', name: 'Finance' },
+      { icon: '📧', name: 'Email' }, { icon: '👥', name: 'CRM' },
+    ];
+    allApps.forEach(app => {
+      const emoji = app.icon || app.emoji || '🔲';
+      const el = document.createElement('div');
+      el.className = 'app-item';
+      el.innerHTML = `<span class="app-emoji">${emoji}</span><span>${app.name}</span>`;
+      el.onclick = () => {
+        document.querySelectorAll('.app-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        askAboutApp(app.name, app.description);
+      };
+      list.appendChild(el);
+    });
+    // Populate welcome tiles (first 9)
+    const tiles = document.getElementById('welcome-tiles');
+    if (tiles) {
+      tiles.innerHTML = '';
+      allApps.slice(0, 9).forEach(app => {
+        const emoji = app.icon || app.emoji || '🔲';
+        const t = document.createElement('div');
+        t.className = 'app-tile';
+        t.innerHTML = `<span class="tile-icon">${emoji}</span><span>${app.name}</span>`;
+        t.onclick = () => askAboutApp(app.name, app.description);
+        tiles.appendChild(t);
+      });
+    }
+  } catch(e) {
+    console.log('Apps load error:', e);
+  }
+}
+
+function askAboutApp(name, desc) {
+  const q = desc ? `Tell me about the ${name} app and what I can do with it.` : `What can you do with ${name}?`;
+  document.getElementById('input').value = q;
+  sendMessage();
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+function showAuth() {
+  document.getElementById('auth-modal').style.display = 'flex';
+  document.getElementById('email-input').focus();
+}
+
+function closeAuth() {
+  document.getElementById('auth-modal').style.display = 'none';
+  document.getElementById('auth-err').textContent = '';
+}
+
+function toggleAuth() {
+  isSignup = !isSignup;
+  document.getElementById('auth-title').textContent = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('auth-sub').textContent = isSignup ? 'Set up your AdaDo account.' : 'Your AI assistant is waiting.';
+  document.getElementById('auth-submit').textContent = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('name-field').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-switch-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
+  document.getElementById('auth-switch-link').textContent = isSignup ? 'Sign in' : 'Create one';
+}
+
+async function doAuth() {
+  const email = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('pw-input').value;
+  const name = document.getElementById('name-input').value.trim() || 'User';
+  const errEl = document.getElementById('auth-err');
+  errEl.textContent = '';
+
+  if (!email || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
+
+  try {
+    const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
+    const body = isSignup ? { email, password, name } : { email, password };
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Error'; return; }
+
+    token = data.token;
+    userName = data.name;
+    localStorage.setItem('adado_token', token);
+    localStorage.setItem('adado_name', userName);
+    updateAuthUI();
+    closeAuth();
+    connectWS(); // reconnect with token
+  } catch(e) {
+    errEl.textContent = 'Connection error';
+  }
+}
+
+function signOut() {
+  token = null; userName = null;
+  localStorage.removeItem('adado_token');
+  localStorage.removeItem('adado_name');
+  updateAuthUI();
+  connectWS();
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Onboarding wizard ───────────────────────────────────────────────────────
+let obStep = 0;
+
+function showOnboarding() {
+  obStep = 0;
+  document.getElementById('onboard-overlay').style.display = 'flex';
+}
+
+function closeOnboard() {
+  document.getElementById('onboard-overlay').style.display = 'none';
+}
+
+function obSetStep(n) {
+  document.querySelectorAll('.onboard-step').forEach((el, i) => {
+    el.classList.toggle('active', i === n || el.id === 'ob-done' && n === 3);
+    if (el.id === 'ob-done') el.classList.toggle('active', n === 3);
+    else el.classList.toggle('active', i === n);
+  });
+  [0,1,2].forEach(i => document.getElementById(`dot-${i}`).classList.toggle('active', i <= n && n < 3));
+  obStep = n;
+}
+
+function obNext(n) {
+  obSetStep(n);
+}
+
+function toggleChip(el) {
+  el.classList.toggle('selected');
+}
+
+function obSkip() {
+  doOnboard(true);
+}
+
+async function doOnboard(skip = false) {
+  const btn = document.getElementById('ob-finish-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const role = (document.getElementById('ob-role')?.value || '').trim();
+  const selectedChips = [...document.querySelectorAll('.chip.selected')].map(c => c.dataset.val);
+  const experience = document.getElementById('ob-exp')?.value || 'intermediate';
+  const goals = (document.getElementById('ob-goals')?.value || '').trim();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+  try {
+    await fetch('/api/auth/onboard', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ role, use_cases: selectedChips, experience, timezone: tz, goals })
+    });
+  } catch(e) {}
+
+  if (skip) {
+    closeOnboard();
+  } else {
+    obSetStep(3);
+  }
+}
+</script>
+</body>
+</html>

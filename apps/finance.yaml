@@ -1,20 +1,29 @@
 id: adado-finance
 name: AdaDo Finance
-description: Personal finance manager for tracking budgets, bills, and transactions.
+description: Let Ada track budgets, log transactions, and surface spending trends in YNAB — the gold standard for personal finance.
 category: personal finance
+market_leader: "YNAB"
+homepage_tile: true
 icon: 💰
-source_repo: https://github.com/diginoz-com-au/adado-finance
 upstream: https://github.com/firefly-iii/firefly-iii
 docker_profile: finance
 port: 8080
+tier_required: cloud
 agent:
   id: finance-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Analyses transactions, budgets, and spending patterns in Firefly III
+  description: Tracks spending, manages budgets, and gives you a clear picture of your finances
   capabilities:
-    - Summarise income and expenses by category
-    - Create and track budgets and piggy banks
+    - Summarise income and expenses by category this month
+    - Check your current budget and how much is left
+    - Log a new transaction or bill
     - Generate monthly and yearly financial reports
+    - Show spending trends and anomalies
+    - Alert when a budget category is nearly exhausted
+    - Project end-of-month balance based on current spending
   api_base: http://localhost:8080/api
 install_cmd: docker compose --profile finance up -d
 uninstall_cmd: docker compose --profile finance down
+setup_guide: |
+  After install, connect your bank accounts by importing a CSV or setting up automatic import.
+  Ada reads your transactions and can answer questions about your finances in plain English.

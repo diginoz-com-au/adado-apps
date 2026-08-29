@@ -1,0 +1,26 @@
+id: adado-vpn
+name: VPN
+description: Let Ada manage peer access and check network status in Tailscale — zero-config WireGuard mesh VPN.
+category: security
+market_leader: "Tailscale"
+homepage_tile: true
+icon: 🔒
+upstream: https://github.com/wg-easy/wg-easy
+docker_profile: vpn
+port: 51821
+tier_required: cli
+agent:
+  id: vpn-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages VPN clients, monitors connections, and configures access
+  capabilities:
+    - List connected VPN clients and their status
+    - Add a new device and generate its config or QR code
+    - Revoke access for a lost or compromised device instantly
+    - Check traffic stats per client
+    - Enable or disable a specific client without deleting it
+    - Alert on unexpected new connection attempts
+install_cmd: docker compose --profile vpn up -d
+uninstall_cmd: docker compose --profile vpn down
+setup_guide: |
+  After install, create your first client in the web UI. Scan the QR code with the WireGuard app on your phone to connect instantly.

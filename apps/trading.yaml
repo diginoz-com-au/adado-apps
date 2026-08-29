@@ -1,20 +1,27 @@
 id: adado-trading
 name: AdaDo Trading
-description: Automated cryptocurrency trading bot with backtesting and strategy support.
+description: Let Ada monitor and adjust automated crypto strategies in Freqtrade — open-source, backtested, always on.
 category: crypto trading bot
+market_leader: "Freqtrade"
+homepage_tile: true
 icon: 📈
-source_repo: https://github.com/diginoz-com-au/adado-trading
 upstream: https://github.com/freqtrade/freqtrade
 docker_profile: trading
 port: 8080
+tier_required: cli
 agent:
   id: trading-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Monitors bot performance, trade history, and strategy metrics
+  description: Monitors bot performance, summarises trades, and alerts on key events
   capabilities:
-    - Query open and closed trade positions
-    - Summarise daily and weekly profit/loss
-    - Report on strategy performance and risk metrics
+    - Show open positions and current P&L
+    - Summarise today's and this week's trading results
+    - Report strategy performance metrics (win rate, drawdown, Sharpe ratio)
+    - Alert on large losses or consecutive losing trades
+    - Show profit/loss history as a chart
+    - Check bot status and exchange connection health
   api_base: http://localhost:8080/api
 install_cmd: docker compose --profile trading up -d
 uninstall_cmd: docker compose --profile trading down
+setup_guide: |
+  Configure your exchange API keys in the Freqtrade config. Choose a strategy or ask Ada to explain the available ones before enabling live trading.

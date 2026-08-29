@@ -1,0 +1,25 @@
+id: adado-health
+name: Health
+description: Let Ada log and query your health metrics from Garmin Connect — activity, sleep, heart rate, and trends in one place.
+category: health
+market_leader: "Garmin Connect"
+homepage_tile: true
+icon: 🏥
+upstream: https://github.com/nicholaswilde/healthchecks
+docker_profile: health
+port: 8000
+tier_required: cloud
+agent:
+  id: health-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Logs health data, surfaces patterns, and keeps you on top of medications and routines
+  capabilities:
+    - Log a symptom, mood, sleep quality, or vital sign
+    - Remind about medications at scheduled times
+    - Summarise your health trends over the past week or month
+    - Flag concerning patterns (e.g. sleep declining, symptoms recurring)
+    - Show sleep, energy, or mood graphs
+    - Alert on missed medication or check-in entries
+    - Export health data for a GP appointment
+install_cmd: docker compose --profile health up -d
+uninstall_cmd: docker compose --profile health down

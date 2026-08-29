@@ -1,0 +1,7 @@
+harness/.env
+harness/*.env.*
+*.bak-*
+**/*.bak-*
+__pycache__/
+*.pyc
+.DS_Store

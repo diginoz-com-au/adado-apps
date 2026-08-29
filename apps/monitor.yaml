@@ -1,20 +1,24 @@
 id: adado-monitor
 name: AdaDo Monitor
-description: Uptime monitoring and status-page tool for services and websites.
+description: Let Ada check service status and manage status pages in Uptime Kuma — know when something goes down before users do.
 category: uptime monitoring
+market_leader: "Uptime Kuma"
+homepage_tile: true
 icon: 📡
-source_repo: https://github.com/diginoz-com-au/adado-monitor
 upstream: https://github.com/louislam/uptime-kuma
 docker_profile: monitor
 port: 3001
 agent:
   id: monitor-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Monitors service uptime, alerts on downtime, and reports SLA metrics
+  description: Monitors your services, alerts on downtime, and tracks reliability over time
   capabilities:
-    - Query current status of all monitored endpoints
-    - Report recent downtime incidents and durations
-    - Manage monitor configuration and notification channels
+    - Show the current status of all monitored services
+    - Check the uptime percentage for a specific service
+    - Report recent downtime incidents and how long they lasted
+    - Add a new URL or service to monitor
+    - Show response time trends
+    - Alert on services that have been slow for more than 5 minutes
   api_base: http://localhost:3001/api
 install_cmd: docker compose --profile monitor up -d
 uninstall_cmd: docker compose --profile monitor down

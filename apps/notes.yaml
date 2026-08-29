@@ -1,0 +1,27 @@
+id: adado-notes
+name: Notes
+description: Let Ada create, link, and search notes in Obsidian — the local-first knowledge tool trusted by millions.
+category: productivity
+market_leader: "Obsidian"
+homepage_tile: true
+icon: 📝
+upstream: https://github.com/laurent22/joplin
+docker_profile: notes
+port: 22300
+tier_required: cloud
+agent:
+  id: notes-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Creates, finds, and organises your notes on demand
+  capabilities:
+    - Create a new note from a voice message or conversation
+    - Search notes by topic, keyword, or tag
+    - Summarise or expand on a long note
+    - Organise notes into notebooks
+    - Link related notes together
+    - Extract action items from meeting notes
+    - Convert rough ideas into structured documents
+install_cmd: docker compose --profile notes up -d
+uninstall_cmd: docker compose --profile notes down
+setup_guide: |
+  Install Joplin desktop or mobile. In Settings → Synchronisation, set the type to Joplin Server and enter your AdaDo instance URL.

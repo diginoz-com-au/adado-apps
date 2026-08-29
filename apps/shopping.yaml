@@ -1,0 +1,25 @@
+id: adado-shopping
+name: Shopping & Home
+description: Let Ada manage your pantry, shopping lists, and recipes in Grocy — home inventory done properly.
+category: home
+market_leader: "Grocy"
+homepage_tile: true
+icon: 🛒
+upstream: https://grocy.info
+docker_profile: shopping
+port: 80
+tier_required: cloud
+agent:
+  id: shopping-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages your household inventory, shopping, and meal planning
+  capabilities:
+    - Tell me what's running low at home
+    - Add items to the shopping list ("we need milk and bread")
+    - Mark items as purchased or used
+    - Alert on food nearing its expiry date
+    - Suggest a recipe based on what's in stock
+    - Generate a weekly shopping list from a meal plan
+    - Track household spending on groceries
+install_cmd: docker compose --profile shopping up -d
+uninstall_cmd: docker compose --profile shopping down

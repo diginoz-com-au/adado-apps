@@ -182,8 +182,8 @@ cd "${INSTALL_DIR}"
 # ── Environment configuration ─────────────────────────────────────────────────
 header "Configuring environment"
 
-ENV_FILE="${INSTALL_DIR}/.env"
-ENV_EXAMPLE="${INSTALL_DIR}/.env.example"
+ENV_FILE="${INSTALL_DIR}/harness/.env"
+ENV_EXAMPLE="${INSTALL_DIR}/harness/.env.example"
 
 if [[ ! -f "${ENV_EXAMPLE}" ]]; then
   warn ".env.example not found — skipping environment setup."
@@ -222,16 +222,29 @@ else
       fi
     }
 
-    if grep -q "^DOMAIN=" "${ENV_FILE}"; then
-      sed_inplace "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" "${ENV_FILE}"
+    # Derive base URL (https for real domains, http for localhost)
+    if [[ "${DOMAIN}" == "localhost" || "${DOMAIN}" == "127.0.0.1" ]]; then
+      BASE_URL="http://${DOMAIN}"
     else
-      printf "\nDOMAIN=%s\n" "${DOMAIN}" >> "${ENV_FILE}"
+      BASE_URL="https://${DOMAIN}"
     fi
 
-    if grep -q "^ADMIN_PASSWORD=" "${ENV_FILE}"; then
-      sed_inplace "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${ADMIN_PASS}|" "${ENV_FILE}"
+    if grep -q "^ADADO_DOMAIN=" "${ENV_FILE}"; then
+      sed_inplace "s|^ADADO_DOMAIN=.*|ADADO_DOMAIN=${DOMAIN}|" "${ENV_FILE}"
     else
-      printf "ADMIN_PASSWORD=%s\n" "${ADMIN_PASS}" >> "${ENV_FILE}"
+      printf "\nADADO_DOMAIN=%s\n" "${DOMAIN}" >> "${ENV_FILE}"
+    fi
+
+    if grep -q "^ADADO_BASE_URL=" "${ENV_FILE}"; then
+      sed_inplace "s|^ADADO_BASE_URL=.*|ADADO_BASE_URL=${BASE_URL}|" "${ENV_FILE}"
+    else
+      printf "ADADO_BASE_URL=%s\n" "${BASE_URL}" >> "${ENV_FILE}"
+    fi
+
+    if grep -q "^ADADO_DB_PASSWORD=" "${ENV_FILE}"; then
+      sed_inplace "s|^ADADO_DB_PASSWORD=.*|ADADO_DB_PASSWORD=${ADMIN_PASS}|" "${ENV_FILE}"
+    else
+      printf "ADADO_DB_PASSWORD=%s\n" "${ADMIN_PASS}" >> "${ENV_FILE}"
     fi
 
     success "Environment configured"
@@ -248,6 +261,7 @@ header "Starting AdaDo (core profile)"
 info "Running: ${COMPOSE_CMD} --profile core up -d"
 printf "\n"
 
+cd "${INSTALL_DIR}/harness"
 ${COMPOSE_CMD} --profile core up -d || {
   printf "\n"
   error "Docker Compose failed. Common causes:"
@@ -260,7 +274,7 @@ ${COMPOSE_CMD} --profile core up -d || {
 # ── Read configured domain for final message ──────────────────────────────────
 PORTAL_DOMAIN="localhost"
 if [[ -f "${ENV_FILE}" ]]; then
-  PORTAL_DOMAIN=$(grep -E "^DOMAIN=" "${ENV_FILE}" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "localhost")
+  PORTAL_DOMAIN=$(grep -E "^ADADO_DOMAIN=" "${ENV_FILE}" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "localhost")
 fi
 
 # ── Success ───────────────────────────────────────────────────────────────────
@@ -276,7 +290,7 @@ printf "  ${BOLD}Install dir:${RESET} ${INSTALL_DIR}\n"
 printf "  ${BOLD}Config:${RESET}      ${ENV_FILE}\n"
 printf "\n"
 printf "  ${BOLD}Add more apps:${RESET}\n"
-printf "    cd ${INSTALL_DIR}\n"
+printf "    cd ${INSTALL_DIR}/harness\n"
 printf "    ${COMPOSE_CMD} --profile <appname> up -d\n"
 printf "\n"
 printf "  ${BOLD}View running services:${RESET}\n"

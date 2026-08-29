@@ -1,0 +1,29 @@
+id: adado-dream-catcher
+name: Dream Catcher
+description: Ada's native idea capture tool — voice a thought, sketch an idea, and Ada turns it into tasks and plans automatically.
+category: productivity
+market_leader: "Dream Catcher"
+homepage_tile: true
+icon: 💭
+tier_required: cloud
+agent:
+  id: dream-catcher-agent
+  model: claude-cli/claude-sonnet-4-6
+  description: Captures, organises, and develops ideas from any source into actionable tasks and projects
+  capabilities:
+    - Log an idea in a single sentence and Ada builds it out
+    - Capture a voice note from a dream or morning thought
+    - Spin any idea into a structured project plan automatically
+    - Send the ideas you captured this week to your Projects app
+    - Connect an idea to related notes, tasks, or goals
+    - Surface ideas that have gone stale and ask whether to develop or drop them
+    - Set a daily morning prompt to capture overnight thoughts
+  integrations:
+    - adado-projects
+    - adado-notes
+install_cmd: docker compose --profile dream-catcher up -d
+uninstall_cmd: docker compose --profile dream-catcher down
+notes: |
+  Dream Catcher captures ideas the moment you have them.
+  Say "Ada, catch this idea" then speak or type freely.
+  She handles structure, priority, and routing — you just think out loud.

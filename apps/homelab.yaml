@@ -1,0 +1,25 @@
+id: adado-homelab
+name: Home Lab
+description: Let Ada start, stop, and inspect Docker containers via Portainer — your entire server stack in one visual panel.
+category: infrastructure
+market_leader: "Portainer"
+homepage_tile: true
+icon: 🏠
+upstream: https://github.com/portainer/portainer
+docker_profile: homelab
+port: 9000
+tier_required: cli
+agent:
+  id: homelab-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages your Docker containers, images, and compose stacks
+  capabilities:
+    - List all running containers and their health status
+    - Start, stop, or restart a named container
+    - Pull the latest image update for a service
+    - View live container logs
+    - Deploy a new Docker Compose stack from a file
+    - Alert on containers that have crashed or restarted unexpectedly
+    - Report overall server resource usage (CPU, memory, disk)
+install_cmd: docker compose --profile homelab up -d
+uninstall_cmd: docker compose --profile homelab down

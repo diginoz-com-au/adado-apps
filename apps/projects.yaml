@@ -1,20 +1,26 @@
 id: adado-projects
 name: AdaDo Projects
-description: Open-source project management platform for teams and individuals.
+description: Let Ada create tasks, update statuses, and report on velocity in Plane — the open-source project management platform.
 category: project management
+market_leader: "Plane"
+homepage_tile: true
 icon: 📋
-source_repo: https://github.com/diginoz-com-au/adado-projects
 upstream: https://github.com/makeplane/plane
 docker_profile: projects
 port: 3000
+tier_required: cloud
 agent:
   id: projects-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Manages project tasks, cycles, modules, and team workflows in Plane
+  description: Manages your projects, tasks, and priorities — creates, updates, and tracks for you
   capabilities:
-    - Create and update issues and projects
-    - Manage cycles, modules, and labels
-    - Query project status and team workload
+    - Create a task from a conversation ("add a task to fix the login bug by Friday")
+    - Summarise what's in progress and what's overdue
+    - Prioritise and reorder tasks based on deadlines
+    - Create and manage project cycles and milestones
+    - Assign tasks to team members
+    - Report on project health and velocity
+    - Turn a list of ideas into an organised project plan
   api_base: http://localhost:3000/api
 install_cmd: docker compose --profile projects up -d
 uninstall_cmd: docker compose --profile projects down

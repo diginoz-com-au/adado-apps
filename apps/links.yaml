@@ -1,0 +1,24 @@
+id: adado-links
+name: Link Manager
+description: Let Ada save, tag, and search bookmarks in Linkwarden — your permanent, self-hosted link archive.
+category: productivity
+market_leader: "Linkwarden"
+homepage_tile: true
+icon: 🔗
+upstream: https://shlink.io
+docker_profile: links
+port: 8080
+tier_required: cloud
+agent:
+  id: links-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Creates short links, tracks performance, and manages your link library
+  capabilities:
+    - Create a short link for any URL ("shorten this")
+    - Check click count and top referrers for a link
+    - List your most clicked links
+    - Update or delete an existing short link
+    - Generate a QR code for a link
+    - Alert on links with zero clicks after 7 days
+install_cmd: docker compose --profile links up -d
+uninstall_cmd: docker compose --profile links down

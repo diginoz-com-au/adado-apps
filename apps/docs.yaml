@@ -1,20 +1,27 @@
 id: adado-docs
 name: AdaDo Docs
-description: Document archiving system with OCR, tagging, and full-text search.
+description: Let Ada scan, archive, and search your documents in Paperless-ngx — receipts, contracts, and letters, fully searchable.
 category: document archive
+market_leader: "Paperless-ngx"
+homepage_tile: true
 icon: 📄
-source_repo: https://github.com/diginoz-com-au/adado-docs
 upstream: https://github.com/paperless-ngx/paperless-ngx
 docker_profile: docs
 port: 8000
+tier_required: cloud
 agent:
   id: docs-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Indexes, searches, and retrieves archived documents and their metadata
+  description: Finds, summarises, and organises your archived documents
   capabilities:
-    - Search documents by content, tag, or correspondent
-    - Retrieve and summarise document contents
-    - Manage tags, correspondents, and document types
+    - Find a document by topic, sender, or date range
+    - Summarise the contents of any archived document
+    - Tag and categorise new documents automatically
+    - Extract key data from invoices or contracts
+    - Alert on documents expiring soon (e.g. passports, licences)
+    - Manage correspondents and document types
   api_base: http://localhost:8000/api
 install_cmd: docker compose --profile docs up -d
 uninstall_cmd: docker compose --profile docs down
+setup_guide: |
+  Point Paperless at a watched folder or email address to auto-import documents. Ada reads and tags them for you.

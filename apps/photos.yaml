@@ -1,20 +1,27 @@
 id: adado-photos
 name: AdaDo Photos
-description: High-performance self-hosted photo and video management with AI features.
+description: Let Ada search, organise, and share your photo library in Immich — self-hosted Google Photos with AI face recognition.
 category: photo management
+market_leader: "Immich"
+homepage_tile: true
 icon: 🖼️
-source_repo: https://github.com/diginoz-com-au/adado-photos
 upstream: https://github.com/immich-app/immich
 docker_profile: photos
 port: 2283
+tier_required: cloud
 agent:
   id: photos-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Searches photos by face, location, and date and manages albums
+  description: Searches and organises your photo library using AI
   capabilities:
-    - Search photos by person, location, or date range
-    - Create and manage shared albums
-    - Report storage usage and backup status
+    - Search photos by person, location, date, or description ("photos from the beach in 2024")
+    - Create and share an album
+    - Show photos from this day in past years
+    - Check backup status and storage usage
+    - Find duplicate photos
+    - Alert on new people detected in your library
   api_base: http://localhost:2283/api
 install_cmd: docker compose --profile photos up -d
 uninstall_cmd: docker compose --profile photos down
+setup_guide: |
+  Install the Immich mobile app, set the server URL to your AdaDo instance, and enable auto-backup. All photos sync to your server automatically.

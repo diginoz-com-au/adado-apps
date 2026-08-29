@@ -1,20 +1,24 @@
 id: adado-chat
 name: AdaDo Chat
-description: Feature-rich AI chat interface supporting local and cloud LLM backends.
-category: AI chat UI
+description: Let Ada orchestrate multi-model AI conversations in Open WebUI — switch models mid-chat, compare outputs, and save threads.
+category: AI interface
+market_leader: "Open WebUI"
+homepage_tile: true
 icon: 💬
-source_repo: https://github.com/diginoz-com-au/adado-chat
 upstream: https://github.com/open-webui/open-webui
 docker_profile: chat
 port: 3000
+tier_required: cli
 agent:
   id: chat-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Manages chat sessions, model configurations, and user conversations
+  description: Manages AI chat sessions, model configuration, and conversation history
   capabilities:
-    - List available models and switch between backends
-    - Retrieve and summarise conversation history
-    - Manage user settings and system prompts
+    - List available AI models and switch between them
+    - Retrieve and summarise past conversation history
+    - Create a system prompt for a specific use case
+    - Configure model parameters (temperature, context window)
+    - Share a conversation as a permalink
   api_base: http://localhost:3000/api
 install_cmd: docker compose --profile chat up -d
 uninstall_cmd: docker compose --profile chat down

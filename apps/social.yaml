@@ -1,0 +1,27 @@
+id: adado-social
+name: Social Media
+description: Let Ada schedule and publish social posts via Postiz — the open-source Buffer alternative, no subscription needed.
+category: marketing
+market_leader: "Postiz"
+homepage_tile: true
+icon: 📱
+upstream: https://github.com/plannable/plannable
+docker_profile: social
+port: 3000
+tier_required: cloud
+agent:
+  id: social-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Drafts, schedules, and publishes social media content across all platforms
+  capabilities:
+    - Draft platform-optimised posts for Facebook, Instagram, LinkedIn, and X
+    - Schedule content for peak engagement times
+    - Adapt one message for each platform's format and character limits
+    - Show what's scheduled and coming up this week
+    - Report on recent post engagement and reach
+    - Suggest hashtags and posting times based on your audience
+install_cmd: docker compose --profile social up -d
+uninstall_cmd: docker compose --profile social down
+setup_guide: |
+  After install, connect your social accounts in the web interface.
+  Ada can then draft and schedule posts on your behalf.

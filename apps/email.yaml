@@ -1,0 +1,28 @@
+id: adado-email
+name: Email
+description: Let Ada read, triage, draft, and send email via Proton Mail — zero surveillance, end-to-end encrypted.
+category: communication
+market_leader: "Proton Mail"
+homepage_tile: true
+icon: 📧
+upstream: https://github.com/roundcube/roundcubemail
+docker_profile: email
+port: 80
+tier_required: cloud
+agent:
+  id: email-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages your inbox — reads, summarises, drafts replies, and triages for you
+  capabilities:
+    - Summarise today's unread emails
+    - Search for emails by sender, subject, or date
+    - Draft and send a reply in your voice
+    - Flag important messages and archive noise
+    - Alert on urgent emails from key contacts
+    - Unsubscribe from mailing lists on request
+    - Sort and file emails by topic automatically
+install_cmd: docker compose --profile email up -d
+uninstall_cmd: docker compose --profile email down
+setup_guide: |
+  After install, configure your domain's MX record to point at this server.
+  Ada connects to the IMAP account and can read and send on your behalf.

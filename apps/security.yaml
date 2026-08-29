@@ -1,0 +1,25 @@
+id: adado-security
+name: Security Centre
+description: Let Ada query threat intelligence and manage security alerts via CrowdSec — crowd-sourced intrusion detection.
+category: security
+market_leader: "CrowdSec"
+homepage_tile: true
+icon: 🚨
+upstream: https://github.com/crowdsecurity/crowdsec
+docker_profile: security
+port: 6060
+tier_required: vps
+agent:
+  id: security-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Monitors security events, blocked threats, and anomalous access patterns
+  capabilities:
+    - Show recent security alerts and their severity
+    - List currently blocked IPs and the reason for blocking
+    - Unblock or whitelist an IP address
+    - Summarise threat trends over the past 24 hours
+    - Alert on brute-force login attempts or unusual access patterns
+    - Report on which services are being targeted
+    - Show geographic distribution of attack sources
+install_cmd: docker compose --profile security up -d
+uninstall_cmd: docker compose --profile security down

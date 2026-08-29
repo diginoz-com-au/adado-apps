@@ -1,20 +1,24 @@
 id: adado-automation
 name: AdaDo Automation
-description: No-code workflow automation engine connecting apps and services with ease.
+description: Let Ada build and trigger n8n workflows — the open-source automation platform that connects anything to anything.
 category: workflow automation
+market_leader: "n8n"
+homepage_tile: true
 icon: ⚡
-source_repo: https://github.com/diginoz-com-au/adado-automation
 upstream: https://github.com/n8n-io/n8n
 docker_profile: automation
 port: 5678
 agent:
   id: automation-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Creates, triggers, and monitors n8n workflows and executions
+  description: Builds, triggers, and monitors automation workflows
   capabilities:
-    - List and trigger automation workflows
-    - Monitor workflow execution history and errors
-    - Create simple workflows from natural language descriptions
+    - List all active automations and their status
+    - Trigger an automation manually by name
+    - Create a simple workflow from a plain-English description
+    - Check recent execution history and failures
+    - Pause or resume an automation
+    - Alert on workflows that are failing repeatedly
   api_base: http://localhost:5678/api
 install_cmd: docker compose --profile automation up -d
 uninstall_cmd: docker compose --profile automation down

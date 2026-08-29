@@ -1,0 +1,26 @@
+id: adado-analytics
+name: Analytics
+description: Let Ada pull traffic stats and audience insights from Plausible — privacy-first website analytics.
+category: marketing
+market_leader: "Plausible"
+homepage_tile: true
+icon: 📊
+upstream: https://github.com/umami-software/umami
+docker_profile: analytics
+port: 3000
+tier_required: cloud
+agent:
+  id: analytics-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Pulls traffic stats, surfaces trends, and alerts on meaningful changes
+  capabilities:
+    - Report today's, this week's, or this month's traffic
+    - Show top pages, referrers, and countries
+    - Compare traffic across two periods
+    - Alert on traffic spikes or drops above a threshold
+    - Identify where visitors are dropping off
+    - Show which pages convert best
+install_cmd: docker compose --profile analytics up -d
+uninstall_cmd: docker compose --profile analytics down
+setup_guide: |
+  After install, add the Umami tracking script to your website. Ada will report on traffic whenever you ask.

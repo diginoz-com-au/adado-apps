@@ -1,20 +1,27 @@
 id: adado-media
 name: AdaDo Media
-description: Self-hosted media server for streaming movies, TV shows, and music.
+description: Let Ada browse and control your media in Jellyfin — stream movies, TV, and music from your own server.
 category: media server
+market_leader: "Jellyfin"
+homepage_tile: true
 icon: 🎬
-source_repo: https://github.com/diginoz-com-au/adado-media
 upstream: https://github.com/jellyfin/jellyfin
 docker_profile: media
 port: 8096
+tier_required: cloud
 agent:
   id: media-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Browses library content, manages metadata, and reports playback activity
+  description: Manages your media library — searches, reports, and organises content
   capabilities:
-    - Search and list media library contents
-    - Retrieve playback history and user activity
-    - Trigger library scans and metadata refresh
+    - Search for a movie, show, or album in your library
+    - Recommend something to watch based on your watch history
+    - Report what's been watched recently and by whom
+    - Trigger a library scan to pick up new content
+    - Check and refresh metadata for a title
+    - Show storage breakdown by media type
   api_base: http://localhost:8096/api
 install_cmd: docker compose --profile media up -d
 uninstall_cmd: docker compose --profile media down
+setup_guide: |
+  Point the library at your media folders. Install the Jellyfin app on your TV, phone, or tablet to stream anywhere.

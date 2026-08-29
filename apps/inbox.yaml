@@ -1,20 +1,26 @@
 id: adado-inbox
 name: AdaDo Inbox
-description: Multi-channel customer support inbox for email, chat, and social messages.
-category: customer inbox
+description: Let Ada handle customer queries across email, live chat, and social in Chatwoot — no support ticket left unseen.
+category: customer support
+market_leader: "Chatwoot"
+homepage_tile: true
 icon: 📬
-source_repo: https://github.com/diginoz-com-au/adado-inbox
 upstream: https://github.com/chatwoot/chatwoot
 docker_profile: inbox
 port: 3000
+tier_required: cloud
 agent:
   id: inbox-agent
   model: claude-cli/claude-haiku-4-5-20251001
-  description: Triages conversations, drafts replies, and surfaces unresolved tickets
+  description: Triages support conversations, drafts replies, and surfaces urgent tickets
   capabilities:
-    - Triage and assign incoming conversations
-    - Draft context-aware customer replies
-    - Report on open, resolved, and pending ticket counts
+    - Show open, pending, and resolved ticket counts
+    - Triage and assign new conversations by priority
+    - Draft a context-aware customer reply
+    - Escalate urgent or complex tickets
+    - Summarise a conversation thread before replying
+    - Report average response time and CSAT scores
+    - Alert on conversations waiting more than 2 hours for a reply
   api_base: http://localhost:3000/api
 install_cmd: docker compose --profile inbox up -d
 uninstall_cmd: docker compose --profile inbox down

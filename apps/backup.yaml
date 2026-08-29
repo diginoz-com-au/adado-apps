@@ -1,0 +1,26 @@
+id: adado-backup
+name: Backup
+description: Let Ada schedule and verify encrypted backups via Duplicati — set it once, never lose data.
+category: infrastructure
+market_leader: "Duplicati"
+homepage_tile: true
+icon: 💾
+upstream: https://github.com/duplicati/duplicati
+docker_profile: backup
+port: 8200
+tier_required: cloud
+agent:
+  id: backup-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Monitors backup health, triggers manual runs, and verifies restore points
+  capabilities:
+    - Check when the last backup ran and whether it succeeded
+    - Trigger an immediate backup for a specific set
+    - List available restore points and their size
+    - Alert on missed or failed backups
+    - Report total storage used across all backup destinations
+    - Verify a backup is restorable
+install_cmd: docker compose --profile backup up -d
+uninstall_cmd: docker compose --profile backup down
+setup_guide: |
+  Open the web interface to configure backup sources (what to back up) and your destination (where to send it). Ada monitors all backup jobs automatically.

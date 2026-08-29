@@ -6,6 +6,36 @@
 services:
 
   # ============================================================
+  # ADA CORE — the AI runtime (Ada chat + auth + tool routing)
+  # ============================================================
+
+  adado-core:
+    build:
+      context: ../core
+      dockerfile: Dockerfile
+    container_name: adado-core
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-qwen2.5:14b}
+      - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
+      - DB_PATH=/data/adado.db
+      - APPS_DIR=/apps
+      - AGENTS_DIR=/agents
+      - INSTANCE_NAME=${INSTANCE_NAME:-Ada}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:8200:8000"
+    volumes:
+      - adado_core_data:/data
+      - ../apps:/apps:ro
+      - ../agents:/agents:ro
+    networks: [adado]
+    profiles: ["core", "all"]
+
+  # ============================================================
   # CORE — always on, required by all apps
   # ============================================================
 
@@ -14,13 +44,12 @@ services:
     container_name: adado-proxy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8201:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - adado_certs:/etc/nginx/certs:ro
     networks: [adado]
-    profiles: ["core", "all"]
+    profiles: ["core", "proxy", "all"]
 
   adado-db:
     image: postgres:16-alpine
@@ -388,6 +417,229 @@ services:
     profiles: ["chat", "all"]
 
   # ============================================================
+  # EMAIL — Roundcube webmail (connects to external IMAP)
+  # ============================================================
+
+  adado-email:
+    image: roundcube/roundcubemail:latest
+    container_name: adado-email
+    restart: unless-stopped
+    environment:
+      - ROUNDCUBEMAIL_DEFAULT_HOST=${EMAIL_IMAP_HOST:-ssl://imap.example.com}
+      - ROUNDCUBEMAIL_DEFAULT_PORT=${EMAIL_IMAP_PORT:-993}
+      - ROUNDCUBEMAIL_SMTP_SERVER=${EMAIL_SMTP_HOST:-tls://smtp.example.com}
+      - ROUNDCUBEMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+      - ROUNDCUBEMAIL_PLUGINS=archive,zipdownload
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+    volumes:
+      - adado_email_data:/var/roundcube/db
+    networks: [adado]
+    profiles: ["email", "all"]
+
+  # ============================================================
+  # NOTES — Joplin Server (self-hosted note sync)
+  # ============================================================
+
+  adado-notes:
+    image: florider89/joplin-server:latest
+    container_name: adado-notes
+    restart: unless-stopped
+    environment:
+      - APP_BASE_URL=${ADADO_BASE_URL:-http://localhost}/notes
+      - DB_CLIENT=pg
+      - POSTGRES_PASSWORD=${ADADO_DB_PASSWORD:-adado_secret}
+      - POSTGRES_DATABASE=joplin
+      - POSTGRES_USER=adado
+      - POSTGRES_HOST=adado-db
+      - POSTGRES_PORT=5432
+    depends_on: [adado-db]
+    networks: [adado]
+    profiles: ["notes", "all"]
+
+  # ============================================================
+  # CALENDAR — Baikal (CalDAV/CardDAV server)
+  # ============================================================
+
+  adado-calendar:
+    image: ckulka/baikal:nginx
+    container_name: adado-calendar
+    restart: unless-stopped
+    volumes:
+      - adado_calendar_config:/var/www/baikal/config
+      - adado_calendar_data:/var/www/baikal/Specific
+    networks: [adado]
+    profiles: ["calendar", "all"]
+
+  # ============================================================
+  # NETWORK — AdGuard Home (DNS ad blocker)
+  # ============================================================
+
+  adado-network:
+    image: adguard/adguardhome:latest
+    container_name: adado-network
+    restart: unless-stopped
+    volumes:
+      - adado_network_config:/opt/adguardhome/conf
+      - adado_network_data:/opt/adguardhome/work
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    networks: [adado]
+    profiles: ["network", "all"]
+
+  # ============================================================
+  # HOMELAB — Portainer (Docker management)
+  # ============================================================
+
+  adado-homelab:
+    image: portainer/portainer-ce:latest
+    container_name: adado-homelab
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - adado_homelab_data:/data
+    networks: [adado]
+    profiles: ["homelab", "all"]
+
+  # ============================================================
+  # BACKUP — Duplicati
+  # ============================================================
+
+  adado-backup:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: adado-backup
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - adado_backup_config:/config
+      - ${BACKUP_SOURCE:-/mnt/data}:/source:ro
+      - ${BACKUP_DEST:-/mnt/backups}:/backups
+    networks: [adado]
+    profiles: ["backup", "all"]
+
+  # ============================================================
+  # VPN — wg-easy (WireGuard with web UI)
+  # ============================================================
+
+  adado-vpn:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    container_name: adado-vpn
+    restart: unless-stopped
+    environment:
+      - WG_HOST=${ADADO_DOMAIN:-localhost}
+      - PASSWORD=${VPN_PASSWORD:-change_me}
+      - WG_DEFAULT_DNS=${VPN_DNS:-1.1.1.1}
+      - WG_ALLOWED_IPS=0.0.0.0/0
+    volumes:
+      - adado_vpn_data:/etc/wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    ports:
+      - "51820:51820/udp"
+    networks: [adado]
+    profiles: ["vpn", "all"]
+
+  # ============================================================
+  # WRITING — Outline (wiki & docs)
+  # ============================================================
+
+  adado-writing:
+    image: outlinewiki/outline:latest
+    container_name: adado-writing
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://adado:${ADADO_DB_PASSWORD:-adado_secret}@adado-db/outline
+      - REDIS_URL=redis://adado-redis:6379/6
+      - SECRET_KEY=${ADADO_SECRET_KEY:-change_me_in_production}
+      - UTILS_SECRET=${ADADO_SECRET_KEY:-change_me_in_production}
+      - URL=${ADADO_BASE_URL:-http://localhost}/writing
+      - PORT=3000
+      - FILE_STORAGE=local
+      - FILE_STORAGE_LOCAL_ROOT_DIR=/var/lib/outline/data
+    volumes:
+      - adado_writing_data:/var/lib/outline/data
+    depends_on: [adado-db, adado-redis]
+    networks: [adado]
+    profiles: ["writing", "all"]
+
+  # ============================================================
+  # ANALYTICS — Umami (privacy-first analytics)
+  # ============================================================
+
+  adado-analytics:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: adado-analytics
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://adado:${ADADO_DB_PASSWORD:-adado_secret}@adado-db/umami
+      - APP_SECRET=${ADADO_SECRET_KEY:-change_me_in_production}
+    depends_on: [adado-db]
+    networks: [adado]
+    profiles: ["analytics", "all"]
+
+  # ============================================================
+  # LINKS — Shlink (URL shortener)
+  # ============================================================
+
+  adado-links:
+    image: shlinkio/shlink:stable
+    container_name: adado-links
+    restart: unless-stopped
+    environment:
+      - DEFAULT_DOMAIN=${ADADO_DOMAIN:-localhost}
+      - IS_HTTPS_ENABLED=true
+      - GEOLITE_LICENSE_KEY=${GEOLITE_KEY:-}
+      - DB_DRIVER=postgres
+      - DB_HOST=adado-db
+      - DB_NAME=shlink
+      - DB_USER=adado
+      - DB_PASSWORD=${ADADO_DB_PASSWORD:-adado_secret}
+    depends_on: [adado-db]
+    networks: [adado]
+    profiles: ["links", "all"]
+
+  # ============================================================
+  # SHOPPING — Grocy (household management)
+  # ============================================================
+
+  adado-shopping:
+    image: lscr.io/linuxserver/grocy:latest
+    container_name: adado-shopping
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - adado_shopping_data:/config
+    networks: [adado]
+    profiles: ["shopping", "all"]
+
+  # ============================================================
+  # SECURITY — CrowdSec (threat detection)
+  # ============================================================
+
+  adado-security:
+    image: crowdsecurity/crowdsec:latest
+    container_name: adado-security
+    restart: unless-stopped
+    environment:
+      - COLLECTIONS=crowdsecurity/linux crowdsecurity/sshd
+    volumes:
+      - adado_security_config:/etc/crowdsec
+      - adado_security_data:/var/lib/crowdsec/data
+      - /var/log:/var/log:ro
+    networks: [adado]
+    profiles: ["security", "all"]
+
+  # ============================================================
   # METRICS — Grafana
   # ============================================================
 
@@ -419,6 +671,7 @@ networks:
 # ============================================================
 
 volumes:
+  adado_core_data:
   adado_db_data:
   adado_redis_data:
   adado_certs:
@@ -437,3 +690,15 @@ volumes:
   adado_git_data:
   adado_chat_data:
   adado_metrics_data:
+  adado_email_data:
+  adado_calendar_config:
+  adado_calendar_data:
+  adado_network_config:
+  adado_network_data:
+  adado_homelab_data:
+  adado_backup_config:
+  adado_vpn_data:
+  adado_writing_data:
+  adado_shopping_data:
+  adado_security_config:
+  adado_security_data:

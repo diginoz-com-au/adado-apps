@@ -1,0 +1,27 @@
+id: adado-calendar
+name: Calendar
+description: Let Ada book, reschedule, and query your Proton Calendar — your private, end-to-end encrypted calendar.
+category: productivity
+market_leader: "Proton Calendar"
+homepage_tile: true
+icon: 📅
+upstream: https://github.com/sabre-io/baikal
+docker_profile: calendar
+port: 80
+tier_required: cloud
+agent:
+  id: calendar-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages your schedule — creates events, checks availability, and reschedules conflicts
+  capabilities:
+    - Tell me what's on today or this week
+    - Create an event ("lunch with Sarah on Thursday at 1pm")
+    - Find a free slot for a meeting
+    - Set reminders and recurring events
+    - Reschedule a conflicting appointment automatically
+    - Block focus time in your schedule
+    - Show upcoming deadlines and events together
+install_cmd: docker compose --profile calendar up -d
+uninstall_cmd: docker compose --profile calendar down
+setup_guide: |
+  After install, add the CalDAV server to your iPhone (Settings → Calendar → Accounts → Add Account → Other → CalDAV), Android (DAVx5 app), or desktop calendar.

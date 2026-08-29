@@ -1,0 +1,27 @@
+id: adado-network
+name: Network Shield
+description: Let Ada query DNS block stats and manage Pi-hole — network-wide ad and tracker blocking, no client install needed.
+category: security
+market_leader: "Pi-hole"
+homepage_tile: true
+icon: 🛡️
+upstream: https://github.com/AdguardTeam/AdGuardHome
+docker_profile: network
+port: 3000
+tier_required: cli
+agent:
+  id: network-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Controls network filtering, monitors DNS traffic, and alerts on threats
+  capabilities:
+    - Show today's DNS query stats and top blocked domains
+    - Block a domain across the whole network
+    - Whitelist a site that's being incorrectly blocked
+    - Show per-device traffic breakdown
+    - Alert on unusual DNS patterns (e.g. device calling suspicious domains)
+    - Enable or disable filtering temporarily
+    - Report what ad networks your devices are attempting to contact
+install_cmd: docker compose --profile network up -d
+uninstall_cmd: docker compose --profile network down
+setup_guide: |
+  After install, set your router's primary DNS to this server's IP address. All devices on your network are automatically protected.
