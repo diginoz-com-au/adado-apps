@@ -1,0 +1,126 @@
+# Dify Configuration for AdaDo
+# After Dify container is running, POST this to the Dify API to set up the core AdaDo workflow
+
+# First: Ensure Dify is running
+# docker compose --profile ai up -d
+
+# Wait for health: curl -s http://localhost/ai-api/health | jq
+
+# Then: Create the Ada Coordinator app in Dify
+
+---
+app:
+  name: "Ada Coordinator"
+  description: "Central dispatcher for AdaDo user requests. Routes to app agents."
+  mode: "agent"  # Use Dify's agent mode for multi-step workflows
+
+variables:
+  # Session state
+  active_apps:
+    type: array
+    description: List of app agent IDs currently active
+    default: []
+
+  recent_context:
+    type: string
+    description: Last 3 user interactions (for context)
+    default: ""
+
+  user_token_budget:
+    type: number
+    description: Remaining Claude API tokens for this user this week
+    default: 100000
+
+# Core workflow node: Parse User Intent
+nodes:
+  parse_intent:
+    type: llm
+    model: claude-3-5-sonnet
+    prompt: |
+      User message: {{user_message}}
+      Active apps: {{active_apps}}
+
+      Parse this into:
+      1. Intent (what the user wants)
+      2. Target app(s) (which agent should handle this)
+      3. Required confirmation? (if delete/send/trade/transfer)
+      4. Confidence (0-1)
+
+      Respond as JSON: {"intent": "...", "target_apps": [...], "requires_confirm": bool, "confidence": 0.8}
+
+  # Route to appropriate app agent
+  route_to_agent:
+    type: http_request
+    method: POST
+    url: "http://adado-coordinator-router:8765/route"
+    payload:
+      intent: "{{parse_intent.intent}}"
+      target_apps: "{{parse_intent.target_apps}}"
+      user_message: "{{user_message}}"
+      token_budget: "{{user_token_budget}}"
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{api_key}}"
+
+  # LLM judgment: Should we ask for confirmation?
+  check_confirmation:
+    type: llm
+    model: claude-3-5-sonnet
+    prompt: |
+      Action: {{route_to_agent.action_type}}
+      Target: {{route_to_agent.target}}
+
+      Is this irreversible and should require user confirmation?
+      Answer: yes/no
+      Reason: (brief)
+
+  # Execute with confirmation if needed
+  execute_or_confirm:
+    type: if_else
+    condition: "{{parse_intent.requires_confirm}}"
+    true_branch:
+      type: llm
+      prompt: |
+        Ask the user to confirm:
+        "{{route_to_agent.action_description}}"
+
+        Format: "This will [description]. Proceed? (yes/no)"
+      name: ask_confirmation
+    false_branch:
+      type: http_request
+      method: POST
+      url: "{{route_to_agent.execute_url}}"
+      payload: "{{route_to_agent.execute_payload}}"
+      name: execute_immediate
+
+  # Synthesize response
+  synthesize:
+    type: llm
+    model: claude-3-5-sonnet
+    prompt: |
+      User asked: {{user_message}}
+
+      Agent response: {{execute_or_confirm.response}}
+      Actions taken: {{route_to_agent.actions_log}}
+
+      Synthesize into a natural, conversational response for the user.
+      Keep it brief (1-2 sentences).
+
+      Start with what was done, then any relevant status.
+
+# Output
+output:
+  response: "{{synthesize.text}}"
+  actions_taken: "{{route_to_agent.actions_log}}"
+  tokens_used: "{{route_to_agent.tokens_used}}"
+  timestamp: "{{now}}"
+
+# Triggers
+triggers:
+  - type: webhook
+    path: /coordinator/dispatch
+    method: POST
+    input:
+      user_message: body.message
+      user_id: body.user_id
+      session_id: body.session_id
