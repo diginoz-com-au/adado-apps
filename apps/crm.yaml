@@ -1,0 +1,20 @@
+id: adado-crm
+name: AdaDo CRM
+description: Modern open-source CRM for managing contacts, deals, and pipelines.
+category: CRM
+icon: 👥
+source_repo: https://github.com/diginoz-com-au/adado-crm
+upstream: https://github.com/twentyhq/twenty
+docker_profile: crm
+port: 3000
+agent:
+  id: crm-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages contacts, opportunities, and sales pipeline activity in Twenty
+  capabilities:
+    - Create and update contacts and companies
+    - Track deal stages and pipeline health
+    - Summarise sales activity and follow-up reminders
+  api_base: http://localhost:3000/api
+install_cmd: docker compose --profile crm up -d
+uninstall_cmd: docker compose --profile crm down

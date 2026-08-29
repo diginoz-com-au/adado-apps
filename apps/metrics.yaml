@@ -1,0 +1,20 @@
+id: adado-metrics
+name: AdaDo Metrics
+description: Observability dashboards for visualising metrics, logs, and traces.
+category: dashboards
+icon: 📊
+source_repo: https://github.com/diginoz-com-au/adado-metrics
+upstream: https://github.com/grafana/grafana
+docker_profile: metrics
+port: 3000
+agent:
+  id: metrics-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Queries dashboards, alerts, and data sources in Grafana
+  capabilities:
+    - List and query Grafana dashboards and panels
+    - Report active alerts and annotation events
+    - Manage data sources and user permissions
+  api_base: http://localhost:3000/api
+install_cmd: docker compose --profile metrics up -d
+uninstall_cmd: docker compose --profile metrics down

@@ -1,0 +1,20 @@
+id: adado-photos
+name: AdaDo Photos
+description: High-performance self-hosted photo and video management with AI features.
+category: photo management
+icon: 🖼️
+source_repo: https://github.com/diginoz-com-au/adado-photos
+upstream: https://github.com/immich-app/immich
+docker_profile: photos
+port: 2283
+agent:
+  id: photos-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Searches photos by face, location, and date and manages albums
+  capabilities:
+    - Search photos by person, location, or date range
+    - Create and manage shared albums
+    - Report storage usage and backup status
+  api_base: http://localhost:2283/api
+install_cmd: docker compose --profile photos up -d
+uninstall_cmd: docker compose --profile photos down

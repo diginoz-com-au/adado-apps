@@ -1,0 +1,20 @@
+id: adado-media
+name: AdaDo Media
+description: Self-hosted media server for streaming movies, TV shows, and music.
+category: media server
+icon: 🎬
+source_repo: https://github.com/diginoz-com-au/adado-media
+upstream: https://github.com/jellyfin/jellyfin
+docker_profile: media
+port: 8096
+agent:
+  id: media-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Browses library content, manages metadata, and reports playback activity
+  capabilities:
+    - Search and list media library contents
+    - Retrieve playback history and user activity
+    - Trigger library scans and metadata refresh
+  api_base: http://localhost:8096/api
+install_cmd: docker compose --profile media up -d
+uninstall_cmd: docker compose --profile media down

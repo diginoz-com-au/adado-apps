@@ -1,0 +1,20 @@
+id: adado-files
+name: AdaDo Files
+description: Self-hosted file cloud with sync, sharing, and collaboration features.
+category: file cloud
+icon: ☁️
+source_repo: https://github.com/diginoz-com-au/adado-files
+upstream: https://github.com/nextcloud/server
+docker_profile: files
+port: 80
+agent:
+  id: files-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Manages file storage, shares, and user quotas in Nextcloud
+  capabilities:
+    - List, upload, and share files and folders
+    - Manage user accounts and storage quotas
+    - Report storage usage and recent file activity
+  api_base: http://localhost:80/api
+install_cmd: docker compose --profile files up -d
+uninstall_cmd: docker compose --profile files down

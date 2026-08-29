@@ -1,0 +1,20 @@
+id: adado-docs
+name: AdaDo Docs
+description: Document archiving system with OCR, tagging, and full-text search.
+category: document archive
+icon: 📄
+source_repo: https://github.com/diginoz-com-au/adado-docs
+upstream: https://github.com/paperless-ngx/paperless-ngx
+docker_profile: docs
+port: 8000
+agent:
+  id: docs-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Indexes, searches, and retrieves archived documents and their metadata
+  capabilities:
+    - Search documents by content, tag, or correspondent
+    - Retrieve and summarise document contents
+    - Manage tags, correspondents, and document types
+  api_base: http://localhost:8000/api
+install_cmd: docker compose --profile docs up -d
+uninstall_cmd: docker compose --profile docs down

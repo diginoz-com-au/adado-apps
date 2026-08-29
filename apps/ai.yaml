@@ -1,0 +1,20 @@
+id: adado-ai
+name: AdaDo AI
+description: Visual AI workflow engine for building LLM-powered apps and agents.
+category: AI workflow engine
+icon: 🧠
+source_repo: https://github.com/diginoz-com-au/adado-ai
+upstream: https://github.com/langgenius/dify
+docker_profile: ai
+port: 80
+agent:
+  id: ai-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Builds and runs AI workflows, chatbots, and knowledge-base applications
+  capabilities:
+    - Create and configure AI workflow pipelines
+    - Manage knowledge bases and document ingestion
+    - Monitor LLM usage, costs, and performance metrics
+  api_base: http://localhost:80/api
+install_cmd: docker compose --profile ai up -d
+uninstall_cmd: docker compose --profile ai down

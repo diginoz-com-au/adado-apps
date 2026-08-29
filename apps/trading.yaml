@@ -1,0 +1,20 @@
+id: adado-trading
+name: AdaDo Trading
+description: Automated cryptocurrency trading bot with backtesting and strategy support.
+category: crypto trading bot
+icon: 📈
+source_repo: https://github.com/diginoz-com-au/adado-trading
+upstream: https://github.com/freqtrade/freqtrade
+docker_profile: trading
+port: 8080
+agent:
+  id: trading-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Monitors bot performance, trade history, and strategy metrics
+  capabilities:
+    - Query open and closed trade positions
+    - Summarise daily and weekly profit/loss
+    - Report on strategy performance and risk metrics
+  api_base: http://localhost:8080/api
+install_cmd: docker compose --profile trading up -d
+uninstall_cmd: docker compose --profile trading down

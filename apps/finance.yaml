@@ -1,0 +1,20 @@
+id: adado-finance
+name: AdaDo Finance
+description: Personal finance manager for tracking budgets, bills, and transactions.
+category: personal finance
+icon: 💰
+source_repo: https://github.com/diginoz-com-au/adado-finance
+upstream: https://github.com/firefly-iii/firefly-iii
+docker_profile: finance
+port: 8080
+agent:
+  id: finance-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Analyses transactions, budgets, and spending patterns in Firefly III
+  capabilities:
+    - Summarise income and expenses by category
+    - Create and track budgets and piggy banks
+    - Generate monthly and yearly financial reports
+  api_base: http://localhost:8080/api
+install_cmd: docker compose --profile finance up -d
+uninstall_cmd: docker compose --profile finance down

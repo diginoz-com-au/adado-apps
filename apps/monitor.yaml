@@ -1,0 +1,20 @@
+id: adado-monitor
+name: AdaDo Monitor
+description: Uptime monitoring and status-page tool for services and websites.
+category: uptime monitoring
+icon: 📡
+source_repo: https://github.com/diginoz-com-au/adado-monitor
+upstream: https://github.com/louislam/uptime-kuma
+docker_profile: monitor
+port: 3001
+agent:
+  id: monitor-agent
+  model: claude-cli/claude-haiku-4-5-20251001
+  description: Monitors service uptime, alerts on downtime, and reports SLA metrics
+  capabilities:
+    - Query current status of all monitored endpoints
+    - Report recent downtime incidents and durations
+    - Manage monitor configuration and notification channels
+  api_base: http://localhost:3001/api
+install_cmd: docker compose --profile monitor up -d
+uninstall_cmd: docker compose --profile monitor down
