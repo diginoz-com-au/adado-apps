@@ -515,6 +515,8 @@ async def signup(req: SignupRequest):
     finally:
         db.close()
 
+CLI_TIERS = {"cli", "vps", "enterprise"}
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
     db = get_db()
@@ -528,6 +530,26 @@ async def login(req: LoginRequest):
     return {
         "token": token,
         "name": user["name"],
+        "onboarding_complete": bool(user["onboarding_complete"]),
+    }
+
+@app.post("/api/auth/cli-login")
+async def cli_login(req: LoginRequest):
+    """Login endpoint for the ado CLI — CLI tier and above only."""
+    db = get_db()
+    user = db.execute(
+        "SELECT * FROM users WHERE email = ?", (req.email.lower(),)
+    ).fetchone()
+    db.close()
+    if not user or not verify_password(req.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid credentials")
+    if user["tier"] not in CLI_TIERS:
+        raise HTTPException(403, "CLI access requires a CLI, VPS, or Enterprise plan. Upgrade at adado.diginoz.com.au")
+    token = make_token(user["id"], req.email)
+    return {
+        "token": token,
+        "name": user["name"],
+        "tier": user["tier"],
         "onboarding_complete": bool(user["onboarding_complete"]),
     }
 

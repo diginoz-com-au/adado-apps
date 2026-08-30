@@ -685,7 +685,7 @@
       <p class="sub">Ada personalises everything to you. Takes 30 seconds.</p>
       <input class="onboard-input" id="ob-role" type="text" placeholder="e.g. student, freelancer, small business owner…">
       <button class="onboard-btn" onclick="obNext(1)">Next →</button>
-      <div class="onboard-skip" onclick="obSkip()">Skip — do this later</div>
+      <div class="onboard-skip" onclick="obNext(1)">Skip this step</div>
     </div>
     <div class="onboard-step" id="ob-step-1">
       <h2>What should Ada help with?</h2>
@@ -709,13 +709,20 @@
         <option value="intermediate" selected>Familiar with AI — be efficient</option>
         <option value="advanced">Experienced — be terse</option>
       </select>
-      <button class="onboard-btn" onclick="obNext(2)">Next →</button>
+      <div style="display:flex;gap:0.75rem;margin-top:0.5rem;">
+        <button class="onboard-btn" style="background:var(--surface2);color:var(--muted);flex:0 0 auto;padding:0.65rem 1rem;" onclick="obNext(0)">← Back</button>
+        <button class="onboard-btn" style="flex:1" onclick="obNext(2)">Next →</button>
+      </div>
     </div>
     <div class="onboard-step" id="ob-step-2">
       <h2>Anything Ada should know?</h2>
       <p class="sub">Optional. Any context helps Ada calibrate to you.</p>
       <textarea class="onboard-input" id="ob-goals" rows="4" placeholder="e.g. I run a small business, I have ADHD, studying part-time…" style="resize:none;line-height:1.5;"></textarea>
-      <button class="onboard-btn" id="ob-finish-btn" onclick="doOnboard()">Start using Ada →</button>
+      <div id="ob-err" style="color:#f87171;font-size:0.82rem;min-height:1.2em;margin-top:-0.25rem;"></div>
+      <div style="display:flex;gap:0.75rem;margin-top:0.5rem;">
+        <button class="onboard-btn" style="background:var(--surface2);color:var(--muted);flex:0 0 auto;padding:0.65rem 1rem;" onclick="obNext(1)">← Back</button>
+        <button class="onboard-btn" style="flex:1" id="ob-finish-btn" onclick="doOnboard()">Start using Ada →</button>
+      </div>
     </div>
     <div class="onboard-step" id="ob-done">
       <div class="done-icon">⚡</div>
@@ -1270,6 +1277,8 @@ function obSkip() { doOnboard(true); }
 
 async function doOnboard(skip = false) {
   const btn = document.getElementById('ob-finish-btn');
+  const errEl = document.getElementById('ob-err');
+  if (errEl) errEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const role     = (document.getElementById('ob-role')?.value || '').trim();
   const chips    = [...document.querySelectorAll('.chip.selected')].map(c => c.dataset.val);
@@ -1277,12 +1286,17 @@ async function doOnboard(skip = false) {
   const goals    = (document.getElementById('ob-goals')?.value || '').trim();
   const tz       = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   try {
-    await fetch('/api/auth/onboard', {
+    const r = await fetch('/api/auth/onboard', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
       body: JSON.stringify({ role, use_cases: chips, experience: exp, timezone: tz, goals })
     });
-  } catch(e) {}
+    if (!r.ok) throw new Error('Save failed');
+  } catch(e) {
+    if (errEl) errEl.textContent = 'Could not save — please try again.';
+    if (btn) { btn.disabled = false; btn.textContent = 'Start using Ada →'; }
+    return;
+  }
   if (skip) closeOnboard(); else obSetStep(3);
 }
 </script>
