@@ -4,6 +4,7 @@ description: Let Ada log and query your health metrics from Garmin Connect — a
 category: health
 market_leader: "Garmin Connect"
 homepage_tile: true
+coming_soon: true
 icon: 🏥
 upstream: https://github.com/nicholaswilde/healthchecks
 docker_profile: health

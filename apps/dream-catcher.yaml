@@ -4,6 +4,7 @@ description: Ada's native idea capture tool — voice a thought, sketch an idea,
 category: productivity
 market_leader: "Dream Catcher"
 homepage_tile: true
+coming_soon: true
 icon: 💭
 tier_required: cloud
 agent:

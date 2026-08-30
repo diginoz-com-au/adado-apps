@@ -4,6 +4,7 @@ description: Let Ada read, triage, draft, and send email via Proton Mail — zer
 category: communication
 market_leader: "Proton Mail"
 homepage_tile: true
+is_core: true
 icon: 📧
 upstream: https://github.com/roundcube/roundcubemail
 docker_profile: email

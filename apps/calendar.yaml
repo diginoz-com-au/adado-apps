@@ -4,6 +4,7 @@ description: Let Ada book, reschedule, and query your Proton Calendar — your p
 category: productivity
 market_leader: "Proton Calendar"
 homepage_tile: true
+is_core: true
 icon: 📅
 upstream: https://github.com/sabre-io/baikal
 docker_profile: calendar

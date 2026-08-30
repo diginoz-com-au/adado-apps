@@ -528,6 +528,9 @@
   .lib-tile .lt-name { font-size: 0.79rem; color: var(--muted); }
   .lib-tile.enabled .lt-name { color: var(--text); }
   .lib-tile .lt-action { font-size: 0.71rem; color: var(--accent); font-weight: 600; margin-top: 0.1rem; }
+  .lib-tile.coming-soon { opacity: 0.55; cursor: default; }
+  .lib-tile.coming-soon:hover { border-color: var(--border); background: var(--surface2); }
+  .lib-tile.coming-soon .lt-action { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1243,15 +1246,16 @@ function openAppLibrary() {
     const emoji = app.icon || app.emoji || '🔲';
     const isEnabled = enabledSlugs.has(slug);
 
+    const isComingSoon = !!app.coming_soon;
     const tile = document.createElement('div');
-    tile.className = `lib-tile${isEnabled ? ' enabled' : ''}`;
+    tile.className = `lib-tile${isEnabled ? ' enabled' : ''}${isComingSoon ? ' coming-soon' : ''}`;
     tile.id = `lt-${slug}`;
     tile.innerHTML = `
       <span class="lt-icon">${emoji}</span>
       <span class="lt-name">${escapeHtml(app.name)}</span>
-      <span class="lt-action">${isEnabled ? '✓ Added' : '+ Enable'}</span>
+      <span class="lt-action">${isEnabled ? '✓ Added' : isComingSoon ? 'Coming Soon' : '+ Enable'}</span>
     `;
-    if (!isEnabled) {
+    if (!isEnabled && !isComingSoon) {
       tile.onclick = () => {
         addAppToSidebar(app);
         const stored = JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');

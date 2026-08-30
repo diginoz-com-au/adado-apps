@@ -4,6 +4,7 @@ description: Gives Ada a real browser to navigate, extract data, and automate an
 category: core infrastructure
 market_leader: "Playwright"
 homepage_tile: true
+is_core: true
 icon: 🌐
 upstream: microsoft/playwright-python
 docker_profile: browser

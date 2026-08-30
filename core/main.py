@@ -339,7 +339,7 @@ def check_burn_rate(db, user_id: int) -> dict:
 
 # ─── Apps loader ──────────────────────────────────────────────────────────────
 
-def load_apps() -> list[dict]:
+def load_apps(include_core: bool = False) -> list[dict]:
     apps = []
     apps_path = Path(APPS_DIR)
     if not apps_path.exists():
@@ -348,6 +348,8 @@ def load_apps() -> list[dict]:
         try:
             data = yaml.safe_load(f.read_text())
             if data:
+                if not include_core and data.get("is_core"):
+                    continue
                 apps.append(data)
         except Exception:
             pass
