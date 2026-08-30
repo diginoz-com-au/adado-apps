@@ -17,7 +17,8 @@ services:
     restart: unless-stopped
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - CLAUDE_MODEL=${CLAUDE_MODEL:-qwen2.5:14b}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-haiku-4-5-20251001}
+      - USE_ANTHROPIC=${USE_ANTHROPIC:-true}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
       - DB_PATH=/data/adado.db
       - APPS_DIR=/apps

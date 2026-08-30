@@ -260,6 +260,31 @@ def _model_cost(model: str, input_tok: int, output_tok: int) -> float:
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
+MAX_CONTEXT_TOKENS = 80_000  # safe budget for history (leaves room for soul + output)
+MAX_SINGLE_MSG_TOKENS = 20_000  # cap any one message to this
+
+def _trim_context(messages: list, soul: str) -> list:
+    soul_tokens = _estimate_tokens(soul)
+    budget = MAX_CONTEXT_TOKENS - soul_tokens
+
+    # Truncate any single message that is individually too long
+    capped = []
+    for m in messages:
+        content = m.get("content", "")
+        if _estimate_tokens(content) > MAX_SINGLE_MSG_TOKENS:
+            chars = MAX_SINGLE_MSG_TOKENS * 4
+            half = chars // 2
+            content = content[:half] + "\n\n[... trimmed for context window ...]\n\n" + content[-half:]
+        capped.append({**m, "content": content})
+
+    # Drop oldest messages until total fits in budget (always keep at least 2)
+    while len(capped) > 2:
+        if sum(_estimate_tokens(m.get("content", "")) for m in capped) <= budget:
+            break
+        capped.pop(0)
+
+    return capped
+
 def log_task(db, user_id: int, model: str, input_tok: int, output_tok: int, task_type: str = "chat") -> float:
     cost = _model_cost(model, input_tok, output_tok)
     db.execute(
@@ -626,7 +651,7 @@ async def chat_ws(websocket: WebSocket):
             await websocket.send_json({"type": "start", "agent": active_agent})
 
             try:
-                context = history[-30:]
+                context = _trim_context(history, active_soul)
                 if USE_ANTHROPIC:
                     full_response, input_tok, output_tok = await stream_anthropic(context, active_soul, websocket)
                 else:
