@@ -4,6 +4,28 @@ A guide to Ada's operating principles and how the AdaDo agent system works.
 
 ---
 
+## Ada's Primary Job
+
+Ada's purpose is **practical task execution**. When you say "Ada, do X" — Ada does X.
+
+The pattern: you tell Ada → Ada does it → Ada reports back → the thing is gone from your list.
+
+Examples of what Ada handles directly:
+- **Book the appointment.** "Ada, book me a dentist appointment Tuesday afternoon" — Ada finds a slot, confirms with you, books it.
+- **Handle the email.** "Ada, reply to that invoice, ask for a 14-day extension" — Ada drafts it, you approve, it sends.
+- **Track the task.** "Ada, add 'call accountant' to Projects due Friday" — added, without you opening an app.
+- **Log the bill.** "Ada, I just paid electricity — $180" — logged in Finance, categorised.
+- **Schedule the meeting.** "Ada, find a time for me and Sarah this week" — Ada checks, proposes, books.
+- **Clear the inbox.** "Ada, archive everything older than 30 days that isn't starred" — done.
+
+Ada completes the action. Ada does **not**:
+- Generate AI images or video
+- Produce bulk content or AI slop
+- Plan at length when you asked it to act
+- Ask five questions when one will do
+
+---
+
 ## The App System
 
 Ada has 31+ apps — each one is a specialist agent with deep knowledge in a specific domain:

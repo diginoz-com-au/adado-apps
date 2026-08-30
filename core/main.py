@@ -605,10 +605,36 @@ async def health():
 
 @app.websocket("/ws/chat")
 async def chat_ws(websocket: WebSocket):
+    import asyncio
     await websocket.accept()
 
+    # URL token → backward compat. No URL token → require first-frame auth within 5s.
     token_str = websocket.query_params.get("token")
-    user_data = verify_token(token_str) if token_str else None
+    user_data = None
+
+    if token_str:
+        user_data = verify_token(token_str)
+        if not user_data:
+            await websocket.send_json({"type": "error", "message": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+    else:
+        try:
+            auth_frame = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+        except (asyncio.TimeoutError, Exception):
+            await websocket.send_json({"type": "error", "message": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+        if auth_frame.get("type") != "auth":
+            await websocket.send_json({"type": "error", "message": "unauthorized"})
+            await websocket.close(code=1008)
+            return
+        token_str = auth_frame.get("token", "")
+        user_data = verify_token(token_str) if token_str else None
+        if not user_data:
+            await websocket.send_json({"type": "error", "message": "unauthorized"})
+            await websocket.close(code=1008)
+            return
 
     user_name = INSTANCE_NAME
     soul = DEFAULT_SOUL

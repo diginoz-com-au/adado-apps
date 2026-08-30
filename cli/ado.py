@@ -258,15 +258,30 @@ def cmd_chat(cfg: dict):
 
     print(CLEAR + logo() + f"  {MUTED}Connecting...{RESET}")
     try:
-        sock = ws_connect(host, port, ws_path, use_ssl=use_ssl, token=token)
+        # Connect without token in URL to keep it out of nginx access logs
+        sock = ws_connect(host, port, ws_path, use_ssl=use_ssl, token=None)
     except Exception as e:
         print(f"\n  {MUTED}✗ {e}{RESET}\n  {MUTED}Try: ado login{RESET}\n")
         return
+
+    # Send auth frame as first message before anything else
+    if token:
+        try:
+            ws_send_text(sock, json.dumps({"type": "auth", "token": token}))
+        except Exception as e:
+            print(f"\n  {MUTED}✗ Auth failed: {e}{RESET}\n")
+            return
 
     ada_name = "Ada"; model_name = ""; user_name = ""
     try:
         _, frame = ws_recv_frame(sock)
         d = json.loads(frame)
+        # If server returned an error (e.g. bad token), bail out gracefully
+        if d.get("type") == "error":
+            print(f"\n  {MUTED}✗ {d.get('message', 'Connection rejected')}{RESET}\n  {MUTED}Try: ado login{RESET}\n")
+            try: sock.close()
+            except Exception: pass
+            return
         ada_name   = d.get("name",  "Ada")
         model_name = d.get("model", "").split("/")[-1]
         user_name  = d.get("user",  "")
