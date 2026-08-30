@@ -26,6 +26,22 @@ services:
       - CORE_DIR=/agents/core
       - INSTANCE_NAME=${INSTANCE_NAME:-Ada}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - CLAUDE_PROXY_URL=${CLAUDE_PROXY_URL:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - TTS_URL=${TTS_URL:-http://host.docker.internal:8085}
+      - STT_URL=${STT_URL:-http://host.docker.internal:8086}
+      - EXPO_PUSH_TOKEN_BASE_URL=https://exp.host/--/api/v2/push/send
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - ELEVENLABS_AGENT_ID=${ELEVENLABS_AGENT_ID:-}
+      - ELEVENLABS_LLM_SECRET=${ELEVENLABS_LLM_SECRET:-}
+      - ELEVENLABS_COST_PER_MIN=${ELEVENLABS_COST_PER_MIN:-0.11}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:-}
+      - FASTMAIL_API_TOKEN=${FASTMAIL_API_TOKEN:-}
+      - FASTMAIL_ACCOUNT_ID=${FASTMAIL_ACCOUNT_ID:-}
+      - FASTMAIL_DOMAIN=${FASTMAIL_DOMAIN:-adadoai.com}
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:

@@ -1,0 +1,20 @@
+{
+  "name": "AdaDo",
+  "short_name": "AdaDo",
+  "description": "AI assistant that just does it. Plain English. No learning curve.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0c14",
+  "theme_color": "#6e5bf0",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "en"
+}

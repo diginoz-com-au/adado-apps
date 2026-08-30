@@ -246,19 +246,82 @@ def init_db():
             monthly_limit_usd REAL,
             updated_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS push_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT 'unknown',
+            created_at INTEGER NOT NULL,
+            UNIQUE(user_id, token)
+        );
+        CREATE INDEX IF NOT EXISTS idx_push_user ON push_tokens(user_id);
+
+        CREATE TABLE IF NOT EXISTS webhooks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id);
+        CREATE INDEX IF NOT EXISTS idx_webhooks_token ON webhooks(token);
+
+        CREATE TABLE IF NOT EXISTS cron_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            schedule TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            timezone TEXT NOT NULL DEFAULT 'UTC',
+            created_at INTEGER NOT NULL,
+            last_run INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_cron_user ON cron_jobs(user_id);
+
+        CREATE TABLE IF NOT EXISTS standing_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            instruction TEXT NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_so_user ON standing_orders(user_id);
     """)
     # Migrate existing tables — add columns if missing (SQLite doesn't support IF NOT EXISTS on ALTER)
     for col, defn in [
-        ("tier",                "TEXT DEFAULT 'cloud'"),
-        ("trial_ends_at",       "INTEGER"),
-        ("onboarding_complete", "INTEGER DEFAULT 0"),
-        ("onboarding_data",     "TEXT DEFAULT '{}'"),
-        ("preferred_model",     "TEXT"),
+        ("tier",                    "TEXT DEFAULT 'cloud'"),
+        ("trial_ends_at",           "INTEGER"),
+        ("onboarding_complete",     "INTEGER DEFAULT 0"),
+        ("onboarding_data",         "TEXT DEFAULT '{}'"),
+        ("preferred_model",         "TEXT"),
+        ("stripe_customer_id",      "TEXT"),
+        ("stripe_subscription_id",  "TEXT"),
+        ("subscription_status",     "TEXT DEFAULT 'free'"),
+        ("email_address",           "TEXT"),
+        ("email_provisioned",       "INTEGER DEFAULT 0"),
     ]:
         try:
             db.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
         except Exception:
             pass
+    # Migrate sessions — add status column if missing
+    try:
+        db.execute("ALTER TABLE sessions ADD COLUMN status TEXT DEFAULT 'active'")
+    except Exception:
+        pass
+    # Email forwards table
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS email_forwards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            from_address TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
     db.commit()
     db.close()
 
@@ -369,6 +432,22 @@ def check_burn_rate(db, user_id: int) -> dict:
         "over_monthly":  bool(monthly_limit and monthly_spent >= monthly_limit),
     }
 
+# ─── Standing orders helper ───────────────────────────────────────────────────
+
+def get_standing_orders_block(user_id: int) -> str:
+    """Return a formatted soul block for the user's enabled standing orders."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT instruction FROM standing_orders WHERE user_id = ? AND enabled = 1 ORDER BY priority DESC, id ASC",
+        (user_id,)
+    ).fetchall()
+    db.close()
+    if not rows:
+        return ""
+    lines = "\n".join(f"- {r['instruction']}" for r in rows)
+    return f"\n\n## Standing Orders (always follow these)\n{lines}"
+
+
 # ─── Apps loader ──────────────────────────────────────────────────────────────
 
 def load_apps(include_core: bool = False) -> list[dict]:
@@ -407,6 +486,21 @@ def resolve_model(user_row) -> str:
     return CLAUDE_MODEL
 
 CLAUDE_PROXY_URL = os.getenv("CLAUDE_PROXY_URL", "")
+
+TOOL_CAPABLE_MODELS = {
+    "claude-opus-4-8", "claude-opus-4-7",
+    "claude-sonnet-4-6", "claude-sonnet-4-5",
+    "claude-haiku-4-5-20251001",
+}
+
+def _estimate_cost(model: str, input_tok: int, output_tok: int) -> float:
+    prices = {
+        "claude-opus-4-8":          (0.000015, 0.000075),
+        "claude-sonnet-4-6":        (0.000003, 0.000015),
+        "claude-haiku-4-5-20251001":(0.0000008, 0.000004),
+    }
+    p = prices.get(model, (0.000003, 0.000015))
+    return round(input_tok * p[0] + output_tok * p[1], 8)
 
 
 async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, model: str = None) -> tuple[str, int, int]:
@@ -477,6 +571,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.on_event("startup")
 async def startup():
     init_db()
+    # Initialise memory/notes/reminders schema
+    try:
+        from memory import init_memory_schema
+        init_memory_schema(DB_PATH)
+    except Exception as e:
+        print(f"Warning: memory schema init failed: {e}")
+    # Start reminder scheduler
+    _start_reminder_scheduler()
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -686,14 +788,234 @@ async def status():
 async def health():
     return {"status": "ok"}
 
+# ─── Reminder scheduler ──────────────────────────────────────────────────────
+
+_reminder_task: Optional[object] = None
+
+def _start_reminder_scheduler():
+    """Start background task that fires pending reminders every 30s."""
+    import asyncio
+
+    async def _check_reminders():
+        while True:
+            try:
+                from memory import fire_due_reminders
+                fired = fire_due_reminders(DB_PATH)
+                for r in fired:
+                    user_id = r["user_id"]
+                    payload = {
+                        "type": "reminder",
+                        "label": r["label"],
+                        "message": r["message"]
+                    }
+                    # Deliver via active WebSocket (best effort)
+                    if user_id in _active_connections:
+                        for ws in list(_active_connections.get(user_id, set())):
+                            try:
+                                await ws.send_json(payload)
+                            except Exception:
+                                pass
+                    # Deliver via Expo push notifications (mobile)
+                    try:
+                        await _send_expo_push(user_id, r["label"], r["message"])
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            await asyncio.sleep(30)
+
+    async def _send_expo_push(user_id: int, title: str, body: str):
+        """Send Expo push notification to all registered tokens for a user."""
+        import httpx
+        db = get_db()
+        rows = db.execute("SELECT token FROM push_tokens WHERE user_id = ?", (user_id,)).fetchall()
+        db.close()
+        if not rows:
+            return
+        expo_url = os.getenv("EXPO_PUSH_TOKEN_BASE_URL", "https://exp.host/--/api/v2/push/send")
+        messages = [
+            {"to": r["token"], "title": title, "body": body, "sound": "default"}
+            for r in rows
+        ]
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(expo_url, json=messages)
+
+    async def _run_cron_jobs():
+        """Check and execute due cron jobs every 60s."""
+        while True:
+            await asyncio.sleep(60)
+            try:
+                import croniter as _cron
+                db = get_db()
+                rows = db.execute(
+                    "SELECT id, user_id, name, schedule, prompt, timezone, last_run FROM cron_jobs WHERE enabled = 1"
+                ).fetchall()
+                db.close()
+                now = time.time()
+                for r in rows:
+                    try:
+                        c = _cron.croniter(r["schedule"])
+                        last = r["last_run"] or (now - 120)
+                        prev = c.get_prev(float, now)
+                        if prev > last:
+                            db = get_db()
+                            db.execute("UPDATE cron_jobs SET last_run = ? WHERE id = ?", (now, r["id"]))
+                            db.commit()
+                            db.close()
+                            asyncio.get_event_loop().create_task(
+                                _run_webhook_turn(r["user_id"], r["prompt"], f"cron:{r['name']}")
+                            )
+                    except Exception:
+                        pass
+            except ImportError:
+                pass  # croniter not installed — cron jobs disabled
+            except Exception:
+                pass
+
+    async def _archive_idle_sessions():
+        """Archive sessions with no message in 24h — runs every hour."""
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                cutoff = int(time.time()) - 86400
+                db = get_db()
+                db.execute(
+                    "UPDATE sessions SET status = 'archived' WHERE (status IS NULL OR status = 'active') AND updated_at < ?",
+                    (cutoff,)
+                )
+                db.commit()
+                db.close()
+            except Exception:
+                pass
+
+    _dream_last_run: dict = {}
+
+    async def _memory_dream_scheduler():
+        """Run memory consolidation at 03:00 UTC nightly for all users."""
+        while True:
+            await asyncio.sleep(300)  # check every 5 min
+            try:
+                import datetime as _dt
+                now_utc = _dt.datetime.utcnow()
+                if now_utc.hour == 3 and now_utc.minute < 5:
+                    today_key = now_utc.strftime("%Y-%m-%d")
+                    if _dream_last_run.get("date") != today_key:
+                        _dream_last_run["date"] = today_key
+                        db = get_db()
+                        user_ids = [r["id"] for r in db.execute("SELECT id FROM users").fetchall()]
+                        db.close()
+                        for uid in user_ids:
+                            try:
+                                await _run_memory_dream(uid)
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(_check_reminders())
+    loop.create_task(_run_cron_jobs())
+    loop.create_task(_archive_idle_sessions())
+    loop.create_task(_memory_dream_scheduler())
+
+async def _send_expo_push(user_id: int, title: str, body: str):
+    """Send Expo push notification to all registered tokens for a user."""
+    import httpx as _httpx
+    db = get_db()
+    rows = db.execute("SELECT token FROM push_tokens WHERE user_id = ?", (user_id,)).fetchall()
+    db.close()
+    if not rows:
+        return
+    expo_url = os.getenv("EXPO_PUSH_TOKEN_BASE_URL", "https://exp.host/--/api/v2/push/send")
+    messages = [{"to": r["token"], "title": title, "body": body, "sound": "default"} for r in rows]
+    async with _httpx.AsyncClient(timeout=10.0) as client:
+        await client.post(expo_url, json=messages)
+
+
+async def _run_memory_dream(user_id: int) -> dict:
+    """
+    Consolidate a user's memory entries — deduplicate and distill key facts.
+    Returns {"consolidated": N, "original": N, "skipped": bool}.
+    """
+    import anthropic as ant_lib
+    db = get_db()
+    rows = db.execute(
+        "SELECT key, value, category FROM user_memory WHERE user_id = ?", (user_id,)
+    ).fetchall()
+    db.close()
+    if len(rows) < 5:
+        return {"skipped": True, "reason": "fewer than 5 entries", "original": len(rows)}
+
+    entries = "\n".join(f'[{r["category"] or "general"}] {r["key"]}: {r["value"]}' for r in rows)
+    prompt = (
+        "You are a memory consolidation engine. The following are a user's raw memory entries. "
+        "Deduplicate, merge related facts, and distil them into a clean, non-redundant list.\n\n"
+        "Rules:\n"
+        "- Merge entries that say the same thing differently\n"
+        "- Keep distinct facts separate\n"
+        "- Output ONLY valid JSON: a list of objects with keys: key, value, category\n"
+        "- category must be one of: user, work, preferences, facts, misc\n"
+        "- Do not invent new facts\n\n"
+        f"Memory entries:\n{entries}\n\n"
+        "Output JSON array only, no prose:"
+    )
+
+    proxy = CLAUDE_PROXY_URL or ("http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else "")
+    client = ant_lib.AsyncAnthropic(
+        api_key="proxy" if proxy else ANTHROPIC_API_KEY,
+        base_url=proxy if proxy else None
+    )
+    resp = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=4096,
+        system="You output only JSON arrays. No explanations, no markdown.",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = resp.content[0].text.strip() if resp.content else "[]"
+
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = "\n".join(raw.splitlines()[1:])
+        raw = raw.rsplit("```", 1)[0].strip()
+
+    try:
+        consolidated = json.loads(raw)
+        if not isinstance(consolidated, list):
+            return {"skipped": True, "reason": "bad AI output", "original": len(rows)}
+    except Exception:
+        return {"skipped": True, "reason": "JSON parse error", "original": len(rows)}
+
+    now = int(time.time())
+    db = get_db()
+    db.execute("DELETE FROM user_memory WHERE user_id = ?", (user_id,))
+    for entry in consolidated:
+        k = str(entry.get("key", "")).strip()
+        v = str(entry.get("value", "")).strip()
+        cat = str(entry.get("category", "misc")).strip()
+        if k and v:
+            db.execute(
+                "INSERT OR REPLACE INTO user_memory (user_id, key, value, category, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, k, v, cat, now, now)
+            )
+    db.commit()
+    db.close()
+    return {"consolidated": len(consolidated), "original": len(rows), "skipped": False}
+
+
+# Track active WebSocket connections per user for reminder delivery
+_active_connections: dict = {}
+
+
 # ─── WebSocket chat ───────────────────────────────────────────────────────────
 
 @app.websocket("/ws/chat")
 async def chat_ws(websocket: WebSocket):
     import asyncio
+    import anthropic as ant_lib
     await websocket.accept()
 
-    # URL token → backward compat. No URL token → require first-frame auth within 5s.
+    # Auth: URL token (compat) or first-frame auth
     token_str = websocket.query_params.get("token")
     user_data = None
 
@@ -721,34 +1043,57 @@ async def chat_ws(websocket: WebSocket):
             await websocket.close(code=1008)
             return
 
+    uid = user_data["sub"] if user_data else None
+
+    # Register connection for reminder delivery
+    if uid:
+        if uid not in _active_connections:
+            _active_connections[uid] = set()
+        _active_connections[uid].add(websocket)
+
     user_name = INSTANCE_NAME
     soul = DEFAULT_SOUL
     onboarding_complete = True
     history = []
     active_model = CLAUDE_MODEL
     user_row_cache = None
+    user_timezone = "UTC"
 
     db = get_db()
     session_id = None
     if user_data:
-        user_row_cache = db.execute("SELECT * FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+        user_row_cache = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
         if user_row_cache:
             user_name = user_row_cache["name"]
             onboarding_complete = bool(user_row_cache["onboarding_complete"])
             active_model = resolve_model(user_row_cache)
             if onboarding_complete:
                 onboarding = json.loads(user_row_cache["onboarding_data"] or "{}")
+                user_timezone = onboarding.get("timezone", "UTC")
                 soul = build_soul(user_name, onboarding)
             else:
                 onboarding = {}
             session = db.execute(
-                "SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
-                (user_data["sub"],)
+                "SELECT * FROM sessions WHERE user_id = ? AND (status IS NULL OR status = 'active') ORDER BY updated_at DESC LIMIT 1",
+                (uid,)
             ).fetchone()
             if session:
                 session_id = session["id"]
                 history = json.loads(session["messages"])[-40:]
     db.close()
+
+    # Inject persistent memory into soul
+    if uid:
+        try:
+            from memory import get_user_memory_block, get_pending_reminders
+            mem_block = get_user_memory_block(uid, DB_PATH)
+            reminders_block = get_pending_reminders(uid, DB_PATH)
+            if mem_block:
+                soul = soul + mem_block
+            if reminders_block:
+                soul = soul + "\n\n## Upcoming Reminders\n" + reminders_block
+        except Exception:
+            pass
 
     # Per-app mode: if ?agent= param is present, pin the soul to that agent
     requested_agent = websocket.query_params.get("agent", "").strip()
@@ -764,7 +1109,27 @@ async def chat_ws(websocket: WebSocket):
         "user":  user_name,
         "onboarding_complete": onboarding_complete,
         "agent": requested_agent if is_pinned_agent else None,
+        "tools_enabled": USE_ANTHROPIC,
     })
+
+    # Build Anthropic client (reused per session)
+    ant_client = None
+    if USE_ANTHROPIC:
+        proxy = CLAUDE_PROXY_URL or (
+            "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+        )
+        if proxy:
+            ant_client = ant_lib.AsyncAnthropic(api_key="proxy", base_url=proxy)
+        elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+            ant_client = ant_lib.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+        else:
+            ant_client = ant_lib.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+
+    user_context = {
+        "tier": user_row_cache["tier"] if user_row_cache else "cloud",
+        "timezone": user_timezone,
+        "user_id": uid,
+    }
 
     try:
         while True:
@@ -775,49 +1140,84 @@ async def chat_ws(websocket: WebSocket):
 
             history.append({"role": "user", "content": user_msg})
 
-            # Burn rate pre-flight check
-            if user_data:
+            # Rate limiting (requests per minute)
+            if not check_rate_limit(uid):
+                await websocket.send_json({"type": "error", "content": "Rate limit exceeded — please wait a moment."})
+                history.pop()
+                continue
+
+            # Burn rate pre-flight
+            if uid:
                 db = get_db()
-                burn = check_burn_rate(db, user_data["sub"])
+                burn = check_burn_rate(db, uid)
                 db.close()
                 if burn["over_daily"]:
-                    await websocket.send_json({
-                        "type": "error",
-                        "content": f"Daily AI spend limit reached (${burn['daily_limit']:.2f}). Reset tomorrow or adjust your limit in Settings."
-                    })
+                    await websocket.send_json({"type": "error", "content": f"Daily spend limit reached (${burn['daily_limit']:.2f})."})
                     history.pop()
                     continue
                 if burn["over_monthly"]:
-                    await websocket.send_json({
-                        "type": "error",
-                        "content": f"Monthly AI spend limit reached (${burn['monthly_limit']:.2f}). Adjust your limit in Settings."
-                    })
+                    await websocket.send_json({"type": "error", "content": f"Monthly spend limit reached (${burn['monthly_limit']:.2f})."})
                     history.pop()
                     continue
 
-            # Agent routing: pinned app-agent takes priority over keyword routing
+            # Resolve agent + soul for this message
             if is_pinned_agent:
                 active_agent = requested_agent
-                active_soul  = soul  # already built with pinned agent context
+                active_soul  = soul
             else:
                 active_agent = route_agent(user_msg)
                 onboarding_data = {}
-                if user_data:
+                if uid:
                     db = get_db()
-                    row = db.execute("SELECT onboarding_data FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+                    row = db.execute("SELECT onboarding_data FROM users WHERE id = ?", (uid,)).fetchone()
                     db.close()
                     if row:
                         onboarding_data = json.loads(row["onboarding_data"] or "{}")
                 active_soul = build_soul_with_agent(user_name, onboarding_data, active_agent)
+                # Re-inject memory into dynamic soul
+                if uid:
+                    try:
+                        from memory import get_user_memory_block
+                        mem_block = get_user_memory_block(uid, DB_PATH)
+                        if mem_block:
+                            active_soul = active_soul + mem_block
+                    except Exception:
+                        pass
+            # Inject standing orders into every turn
+            if uid:
+                active_soul = active_soul + get_standing_orders_block(uid)
 
+            # Typing indicator — client shows "Ada is typing…"
+            await websocket.send_json({"type": "typing", "agent": active_agent})
             await websocket.send_json({"type": "start", "agent": active_agent})
 
             try:
                 context = _trim_context(history, active_soul)
-                if USE_ANTHROPIC:
-                    full_response, input_tok, output_tok = await stream_anthropic(context, active_soul, websocket, model=active_model)
+
+                async def _send(msg):
+                    await websocket.send_json(msg)
+
+                if USE_ANTHROPIC and ant_client:
+                    from agent_loop import run_agent_loop
+                    full_response, input_tok, output_tok = await run_agent_loop(
+                        messages=context,
+                        soul=active_soul,
+                        model=active_model,
+                        client=ant_client,
+                        user_id=uid or 0,
+                        user_context=user_context,
+                        send_fn=_send,
+                        tools_enabled=True,
+                    )
                 else:
-                    full_response, input_tok, output_tok = await stream_ollama(context, active_soul, websocket)
+                    from agent_loop import run_agent_loop_ollama
+                    full_response, input_tok, output_tok = await run_agent_loop_ollama(
+                        messages=context,
+                        soul=active_soul,
+                        model=CLAUDE_MODEL,
+                        ollama_url=OLLAMA_URL,
+                        send_fn=_send,
+                    )
             except Exception as e:
                 await websocket.send_json({"type": "error", "content": f"AI error: {e}"})
                 history.pop()
@@ -826,7 +1226,8 @@ async def chat_ws(websocket: WebSocket):
             history.append({"role": "assistant", "content": full_response})
             await websocket.send_json({"type": "done", "agent": active_agent})
 
-            if user_data:
+            # Persist session
+            if uid:
                 db = get_db()
                 now = int(time.time())
                 if session_id:
@@ -837,10 +1238,11 @@ async def chat_ws(websocket: WebSocket):
                 else:
                     cur = db.execute(
                         "INSERT INTO sessions (user_id, messages, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                        (user_data["sub"], json.dumps(history), now, now)
+                        (uid, json.dumps(history), now, now)
                     )
                     session_id = cur.lastrowid
-                log_task(db, user_data["sub"], CLAUDE_MODEL, input_tok, output_tok)
+                log_task(db, uid, active_model, input_tok, output_tok)
+                db.commit()
                 db.close()
 
     except WebSocketDisconnect:
@@ -850,6 +1252,679 @@ async def chat_ws(websocket: WebSocket):
             await websocket.send_json({"type": "error", "content": str(e)})
         except Exception:
             pass
+    finally:
+        # Deregister connection
+        if uid and uid in _active_connections:
+            _active_connections[uid].discard(websocket)
+
+# ─── REST chat endpoint (for CLI + non-WS clients) ───────────────────────────
+
+class ChatRequest(BaseModel):
+    content: str
+    session_id: Optional[int] = None
+    agent: Optional[str] = None
+    thinking: bool = False
+    thinking_budget: int = 8000
+
+class ChatResponse(BaseModel):
+    response: str
+    agent: str
+    session_id: int
+    input_tokens: int
+    output_tokens: int
+
+@app.post("/api/chat")
+async def chat_rest(req: ChatRequest, request: Request):
+    """
+    Non-streaming REST chat endpoint. Simpler for CLI and background tasks.
+    For streaming, use the WebSocket /ws/chat endpoint.
+    """
+    import anthropic as ant_lib
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+
+    uid = user_data["sub"]
+    db = get_db()
+    user_row = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user_row:
+        db.close()
+        raise HTTPException(404, "User not found")
+
+    onboarding = json.loads(user_row["onboarding_data"] or "{}")
+    user_name = user_row["name"]
+    user_timezone = onboarding.get("timezone", "UTC")
+    active_model = resolve_model(user_row)
+
+    # Load or create session (active sessions only)
+    session_id = req.session_id
+    history = []
+    if session_id:
+        session = db.execute(
+            "SELECT * FROM sessions WHERE id = ? AND user_id = ? AND (status IS NULL OR status = 'active')",
+            (session_id, uid)
+        ).fetchone()
+        if session:
+            history = json.loads(session["messages"])[-40:]
+    else:
+        session = db.execute(
+            "SELECT * FROM sessions WHERE user_id = ? AND (status IS NULL OR status = 'active') ORDER BY updated_at DESC LIMIT 1",
+            (uid,)
+        ).fetchone()
+        if session:
+            session_id = session["id"]
+            history = json.loads(session["messages"])[-40:]
+    db.close()
+
+    # Build soul + memory
+    soul = build_soul(user_name, onboarding)
+    try:
+        from memory import get_user_memory_block
+        mem = get_user_memory_block(uid, DB_PATH)
+        if mem:
+            soul += mem
+    except Exception:
+        pass
+
+    # Route agent
+    agent_name = req.agent or route_agent(req.content)
+    soul = build_soul_with_agent(user_name, onboarding, agent_name)
+    soul += get_standing_orders_block(uid)
+
+    history.append({"role": "user", "content": req.content})
+    context = _trim_context(history, soul)
+
+    collected_chunks = []
+    async def _collect(msg):
+        if msg.get("type") == "chunk":
+            collected_chunks.append(msg.get("content", ""))
+
+    user_context = {"tier": user_row["tier"] or "cloud", "timezone": user_timezone, "user_id": uid}
+
+    thinking_blocks = []
+    try:
+        if USE_ANTHROPIC and req.thinking:
+            # Extended thinking mode — call Anthropic directly, no tool loop
+            proxy = CLAUDE_PROXY_URL or ("http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else "")
+            client = ant_lib.AsyncAnthropic(
+                api_key="proxy" if proxy else ANTHROPIC_API_KEY,
+                base_url=proxy if proxy else None
+            )
+            think_model = active_model if active_model in TOOL_CAPABLE_MODELS else "claude-sonnet-4-6"
+            budget = max(1024, min(req.thinking_budget, 32000))
+            resp = await client.messages.create(
+                model=think_model,
+                max_tokens=budget + 4096,
+                system=soul,
+                messages=context,
+                thinking={"type": "enabled", "budget_tokens": budget},
+            )
+            full = ""
+            for block in resp.content:
+                if block.type == "thinking":
+                    thinking_blocks.append({"type": "thinking", "thinking": block.thinking})
+                elif block.type == "text":
+                    full += block.text
+            input_tok  = resp.usage.input_tokens
+            output_tok = resp.usage.output_tokens
+        elif USE_ANTHROPIC:
+            proxy = CLAUDE_PROXY_URL or ("http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else "")
+            if proxy:
+                client = ant_lib.AsyncAnthropic(api_key="proxy", base_url=proxy)
+            else:
+                client = ant_lib.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            from agent_loop import run_agent_loop
+            full, input_tok, output_tok = await run_agent_loop(
+                messages=context, soul=soul, model=active_model,
+                client=client, user_id=uid, user_context=user_context,
+                send_fn=_collect, tools_enabled=True
+            )
+        else:
+            from agent_loop import run_agent_loop_ollama
+            full, input_tok, output_tok = await run_agent_loop_ollama(
+                messages=context, soul=soul, model=CLAUDE_MODEL,
+                ollama_url=OLLAMA_URL, send_fn=_collect
+            )
+    except Exception as e:
+        raise HTTPException(500, f"AI error: {e}")
+
+    history.append({"role": "assistant", "content": full})
+
+    db = get_db()
+    now = int(time.time())
+    if session_id:
+        db.execute("UPDATE sessions SET messages = ?, updated_at = ? WHERE id = ?",
+                   (json.dumps(history[-60:]), now, session_id))
+    else:
+        cur = db.execute("INSERT INTO sessions (user_id, messages, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                         (uid, json.dumps(history), now, now))
+        session_id = cur.lastrowid
+    log_task(db, uid, active_model, input_tok, output_tok)
+    db.commit()
+    db.close()
+
+    result = {"response": full, "agent": agent_name, "session_id": session_id,
+              "input_tokens": input_tok, "output_tokens": output_tok}
+    if thinking_blocks:
+        result["thinking"] = thinking_blocks
+    return result
+
+
+# ─── Session management API ───────────────────────────────────────────────────
+
+@app.get("/api/sessions")
+async def list_sessions(request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, created_at, updated_at, COALESCE(status, 'active') as status, substr(messages, 1, 200) as preview FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 20",
+        (uid,)
+    ).fetchall()
+    db.close()
+    sessions = []
+    for r in rows:
+        try:
+            msgs = json.loads(r["preview"] + '"]' if not r["preview"].endswith("]") else r["preview"])
+            first_msg = next((m.get("content", "")[:80] for m in msgs if m.get("role") == "user"), "")
+        except Exception:
+            first_msg = ""
+        sessions.append({"id": r["id"], "created_at": r["created_at"], "updated_at": r["updated_at"], "status": r["status"], "preview": first_msg})
+    return sessions
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    row = db.execute("SELECT * FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_data["sub"])).fetchone()
+    db.close()
+    if not row:
+        raise HTTPException(404, "Session not found")
+    return {"id": row["id"], "messages": json.loads(row["messages"]), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+@app.post("/api/sessions/new")
+async def new_session(request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    now = int(time.time())
+    cur = db.execute("INSERT INTO sessions (user_id, messages, created_at, updated_at) VALUES (?, '[]', ?, ?)",
+                     (user_data["sub"], now, now))
+    db.commit()
+    session_id = cur.lastrowid
+    db.close()
+    return {"session_id": session_id}
+
+
+# ─── Memory API ───────────────────────────────────────────────────────────────
+
+@app.get("/api/memory")
+async def get_memory(request: Request, q: str = ""):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    if q:
+        rows = db.execute(
+            "SELECT key, value, category, created_at, updated_at FROM user_memory WHERE user_id = ? AND (key LIKE ? OR value LIKE ?) ORDER BY updated_at DESC",
+            (uid, f"%{q}%", f"%{q}%")
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT key, value, category, created_at, updated_at FROM user_memory WHERE user_id = ? ORDER BY category, updated_at DESC",
+            (uid,)
+        ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+@app.delete("/api/memory/{key}")
+async def delete_memory(key: str, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM user_memory WHERE user_id = ? AND key = ?", (user_data["sub"], key))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Reminders API ────────────────────────────────────────────────────────────
+
+@app.get("/api/reminders")
+async def get_reminders(request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    now = int(time.time())
+    rows = db.execute(
+        "SELECT id, label, message, fire_at, fired, fired_at FROM reminders WHERE user_id = ? AND fire_at > ? AND fired = 0 ORDER BY fire_at ASC",
+        (uid, now)
+    ).fetchall()
+    db.close()
+    from datetime import datetime, timezone
+    return [{"id": r["id"], "label": r["label"], "message": r["message"],
+             "fire_at": datetime.fromtimestamp(r["fire_at"], tz=timezone.utc).isoformat(),
+             "fired": bool(r["fired"])} for r in rows]
+
+@app.delete("/api/reminders/{reminder_id}")
+async def delete_reminder(reminder_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM reminders WHERE id = ? AND user_id = ?", (reminder_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Notes API ────────────────────────────────────────────────────────────────
+
+@app.get("/api/notes")
+async def get_notes(request: Request, q: str = ""):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    if q:
+        rows = db.execute(
+            "SELECT id, title, tags, created_at, updated_at, substr(content,1,100) as preview FROM notes WHERE user_id = ? AND (title LIKE ? OR content LIKE ?) ORDER BY updated_at DESC",
+            (uid, f"%{q}%", f"%{q}%")
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id, title, tags, created_at, updated_at, substr(content,1,100) as preview FROM notes WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50",
+            (uid,)
+        ).fetchall()
+    db.close()
+    return [{"id": r["id"], "title": r["title"], "tags": json.loads(r["tags"] or "[]"),
+             "preview": r["preview"], "created_at": r["created_at"], "updated_at": r["updated_at"]} for r in rows]
+
+@app.get("/api/notes/{note_id}")
+async def get_note(note_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    row = db.execute("SELECT * FROM notes WHERE id = ? AND user_id = ?", (note_id, user_data["sub"])).fetchone()
+    db.close()
+    if not row:
+        raise HTTPException(404, "Note not found")
+    return {"id": row["id"], "title": row["title"], "content": row["content"],
+            "tags": json.loads(row["tags"] or "[]"), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+
+@app.delete("/api/notes/{note_id}")
+async def delete_note(note_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM notes WHERE id = ? AND user_id = ?", (note_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Push notification registration ──────────────────────────────────────────
+
+class PushTokenRequest(BaseModel):
+    token: str
+    platform: str  # ios | android | web
+
+@app.post("/api/push/register")
+async def register_push(req: PushTokenRequest, request: Request):
+    """Register a push notification token for mobile app."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    now = int(time.time())
+    db.execute(
+        "INSERT INTO push_tokens (user_id, token, platform, created_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, token) DO UPDATE SET platform = excluded.platform, created_at = excluded.created_at",
+        (uid, req.token, req.platform, now)
+    )
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Voice endpoints (local Piper TTS / faster-whisper STT) ──────────────────
+
+TTS_SERVICE_URL = os.getenv("TTS_URL", "http://host.docker.internal:8085")
+STT_SERVICE_URL = os.getenv("STT_URL", "http://host.docker.internal:8086")
+
+# ─── ElevenLabs Conversational AI — live voice chat ──────────────────────────
+# Architecture:
+#   Client → POST /api/voice/session → AdaDo creates signed EL conversation URL
+#   Client connects to that URL directly (ElevenLabs WebSocket)
+#   ElevenLabs calls POST /api/voice/llm  (OpenAI-compat) for each AI turn
+#   ElevenLabs handles: VAD, STT, turn detection, TTS streaming
+#   AdaDo handles: auth, Claude inference, credit tracking
+
+ELEVENLABS_API_KEY   = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_AGENT_ID  = os.getenv("ELEVENLABS_AGENT_ID", "")
+ELEVENLABS_API_BASE  = "https://api.elevenlabs.io/v1"
+
+# ─── Stripe ───────────────────────────────────────────────────────────────────
+STRIPE_SECRET_KEY      = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET  = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_ID        = os.getenv("STRIPE_PRICE_ID", "")  # monthly subscription price
+
+# ─── Fastmail ─────────────────────────────────────────────────────────────────
+FASTMAIL_API_TOKEN  = os.getenv("FASTMAIL_API_TOKEN", "")
+FASTMAIL_ACCOUNT_ID = os.getenv("FASTMAIL_ACCOUNT_ID", "")
+FASTMAIL_DOMAIN     = os.getenv("FASTMAIL_DOMAIN", "adadoai.com")
+
+def _el_headers():
+    return {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
+
+
+@app.post("/api/voice/session")
+async def voice_session(request: Request):
+    """
+    Issue a signed ElevenLabs conversation URL for the authenticated user.
+    The client uses this URL to open a direct WebSocket to ElevenLabs.
+    Credits come from the shared AdaDo ElevenLabs API key.
+    """
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not ELEVENLABS_API_KEY or not ELEVENLABS_AGENT_ID:
+        raise HTTPException(503, "Voice not configured — ELEVENLABS_API_KEY or ELEVENLABS_AGENT_ID missing")
+
+    uid = user_data["sub"]
+    db = get_db()
+    row = db.execute("SELECT name, tier, onboarding_data FROM users WHERE id = ?", (uid,)).fetchone()
+    db.close()
+    if not row:
+        raise HTTPException(404, "User not found")
+
+    # Build per-user overrides passed to EL agent
+    onboarding = json.loads(row["onboarding_data"] or "{}")
+    tz = onboarding.get("timezone", "UTC")
+    user_name = row["name"]
+
+    # Dynamic variables injected into the EL agent's system prompt
+    # These let EL's custom LLM call carry user context we'd otherwise lose
+    dynamic_vars = {
+        "user_id":   str(uid),
+        "user_name": user_name,
+        "timezone":  tz,
+    }
+
+    import httpx
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{ELEVENLABS_API_BASE}/convai/conversation/get_signed_url",
+            headers=_el_headers(),
+            json={"agent_id": ELEVENLABS_AGENT_ID, "conversation_config_override": {
+                "agent": {
+                    "prompt": {
+                        "prompt": _build_voice_soul(user_name, onboarding)
+                    }
+                }
+            }},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(502, f"ElevenLabs error: {resp.text[:200]}")
+
+    data = resp.json()
+    signed_url = data.get("signed_url", "")
+
+    # Log that a voice session was started (for credit tracking)
+    db = get_db()
+    db.execute(
+        "INSERT INTO task_logs (user_id, model, input_tokens, output_tokens, cost_usd, task_type, created_at) "
+        "VALUES (?, 'elevenlabs/convai', 0, 0, 0.0, 'voice_session_start', ?)",
+        (uid, int(time.time()))
+    )
+    db.commit()
+    db.close()
+
+    return {
+        "signed_url": signed_url,
+        "agent_id": ELEVENLABS_AGENT_ID,
+        "user_name": user_name,
+        "dynamic_vars": dynamic_vars,
+    }
+
+
+def _build_voice_soul(name: str, onboarding: dict) -> str:
+    """Condensed soul for voice — shorter than text chat, optimised for speech."""
+    base = (
+        f"You are Ada, an AI assistant for {name}. "
+        "You are direct, warm, and capable. Keep answers concise — this is a voice conversation. "
+        "No bullet points, no markdown, no code blocks. Speak naturally. "
+        "Get to the point in one or two sentences unless depth is genuinely needed."
+    )
+    tz = onboarding.get("timezone", "")
+    if tz:
+        base += f" The user's timezone is {tz}."
+    goals = onboarding.get("goals", "")
+    if goals:
+        base += f" Context: {goals[:200]}"
+    return base
+
+
+@app.post("/api/voice/llm")
+async def voice_llm(request: Request):
+    """
+    OpenAI-compatible chat completion endpoint called by ElevenLabs custom LLM.
+    ElevenLabs sends an OpenAI-format request; we respond with Claude, streaming.
+    Auth: ElevenLabs signs with a shared secret header we verify.
+    """
+    # Verify this is from ElevenLabs (shared secret or IP — use secret header)
+    el_secret = os.getenv("ELEVENLABS_LLM_SECRET", "")
+    if el_secret:
+        incoming = request.headers.get("x-eleven-secret", "")
+        if incoming != el_secret:
+            raise HTTPException(401, "Unauthorized")
+
+    body = await request.json()
+    messages = body.get("messages", [])
+    stream = body.get("stream", True)
+    model_hint = body.get("model", "claude-sonnet-4-6")
+
+    # Extract user_id from the system message dynamic vars EL injects
+    uid = 0
+    user_name = "User"
+    soul = DEFAULT_SOUL
+    for m in messages:
+        if m.get("role") == "system":
+            content = m.get("content", "")
+            # EL injects dynamic vars as JSON in system — parse if present
+            soul = content or DEFAULT_SOUL
+            break
+
+    # Filter to user/assistant turns only (Claude doesn't want system in messages list)
+    chat_messages = [m for m in messages if m.get("role") in ("user", "assistant")]
+
+    import anthropic as ant_lib
+    from fastapi.responses import StreamingResponse
+
+    proxy = CLAUDE_PROXY_URL or (
+        "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+    )
+    client = ant_lib.AsyncAnthropic(
+        api_key="proxy" if proxy else ANTHROPIC_API_KEY,
+        base_url=proxy if proxy else None,
+    )
+
+    async def _openai_compat_stream():
+        """Yield OpenAI-format SSE chunks wrapping Claude streaming."""
+        import json as _json, time as _time
+        chunk_id = f"chatcmpl-voice-{int(_time.time())}"
+        model_name = "claude-sonnet-4-6"
+
+        # Opening chunk
+        yield f"data: {_json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'model': model_name, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]})}\n\n"
+
+        full_text = ""
+        input_tok = 0
+        output_tok = 0
+        try:
+            async with client.messages.stream(
+                model=CLAUDE_MODEL if CLAUDE_MODEL in TOOL_CAPABLE_MODELS else "claude-sonnet-4-6",
+                max_tokens=512,   # voice responses must be short
+                system=soul,
+                messages=chat_messages,
+            ) as stream_:
+                async for event in stream_:
+                    if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                        delta = event.delta.text
+                        full_text += delta
+                        yield f"data: {_json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'model': model_name, 'choices': [{'index': 0, 'delta': {'content': delta}, 'finish_reason': None}]})}\n\n"
+                final = await stream_.get_final_message()
+                input_tok = final.usage.input_tokens
+                output_tok = final.usage.output_tokens
+        except Exception as e:
+            err = f"Sorry, I had a technical issue: {str(e)[:60]}"
+            yield f"data: {_json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'model': model_name, 'choices': [{'index': 0, 'delta': {'content': err}, 'finish_reason': None}]})}\n\n"
+            full_text = err
+
+        # Done chunk
+        yield f"data: {_json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'model': model_name, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
+        yield "data: [DONE]\n\n"
+
+        # Track usage (best-effort, uid may be 0 for unauthenticated EL calls)
+        if uid:
+            try:
+                _cost = _estimate_cost(model_name, input_tok, output_tok)
+                db = get_db()
+                log_task(db, uid, model_name, input_tok, output_tok)
+                db.commit()
+                db.close()
+            except Exception:
+                pass
+
+    if stream:
+        return StreamingResponse(_openai_compat_stream(), media_type="text/event-stream")
+
+    # Non-streaming fallback (EL shouldn't need this but just in case)
+    resp = await client.messages.create(
+        model=CLAUDE_MODEL if CLAUDE_MODEL in TOOL_CAPABLE_MODELS else "claude-sonnet-4-6",
+        max_tokens=512,
+        system=soul,
+        messages=chat_messages,
+    )
+    text = resp.content[0].text if resp.content else ""
+    return {
+        "id": f"chatcmpl-voice-{int(time.time())}",
+        "object": "chat.completion",
+        "model": "claude-sonnet-4-6",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": resp.usage.input_tokens, "completion_tokens": resp.usage.output_tokens},
+    }
+
+
+@app.post("/api/voice/end")
+async def voice_end(request: Request):
+    """
+    Log end of a voice conversation with duration/cost for credit tracking.
+    Client calls this when the ElevenLabs WebSocket closes.
+    """
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    conversation_id = body.get("conversation_id", "")
+    duration_secs = body.get("duration_secs", 0)
+
+    # Rough EL cost: ~$0.11/min for Starter tier
+    el_cost_per_min = float(os.getenv("ELEVENLABS_COST_PER_MIN", "0.11"))
+    cost = round((duration_secs / 60) * el_cost_per_min, 6)
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO task_logs (user_id, model, input_tokens, output_tokens, cost_usd, task_type, created_at) "
+        "VALUES (?, 'elevenlabs/convai', ?, 0, ?, 'voice_session_end', ?)",
+        (user_data["sub"], int(duration_secs * 10), cost, int(time.time()))
+    )
+    db.commit()
+    db.close()
+    return {"ok": True, "cost_usd": cost, "duration_secs": duration_secs}
+
+
+@app.get("/api/voice/usage")
+async def voice_usage(request: Request):
+    """Voice credit usage for this user."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    since = int(time.time()) - 86400 * 30
+    db = get_db()
+    rows = db.execute(
+        "SELECT task_type, SUM(cost_usd) as cost, COUNT(*) as n FROM task_logs "
+        "WHERE user_id = ? AND task_type LIKE 'voice%' AND created_at > ? GROUP BY task_type",
+        (uid, since)
+    ).fetchall()
+    db.close()
+    return {"monthly_voice": [dict(r) for r in rows]}
+
+@app.post("/api/voice/tts")
+async def voice_tts(request: Request):
+    """Proxy TTS synthesis — clients call this instead of TTS service directly."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    text = body.get("text", "").strip()
+    if not text:
+        raise HTTPException(400, "No text provided")
+    import httpx
+    from fastapi.responses import Response
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(f"{TTS_SERVICE_URL}/synthesize", params={"text": text})
+        if resp.status_code == 200:
+            return Response(content=resp.content, media_type="audio/wav")
+        raise HTTPException(502, "TTS service error")
+
+@app.post("/api/voice/stt")
+async def voice_stt(request: Request):
+    """Proxy STT transcription — clients upload audio here."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    import httpx
+    form = await request.form()
+    audio = form.get("file")
+    if not audio:
+        raise HTTPException(400, "No audio file provided")
+    content = await audio.read()
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{STT_SERVICE_URL}/transcribe",
+            files={"file": (audio.filename, content, audio.content_type or "audio/wav")},
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        raise HTTPException(502, "STT service error")
+
 
 # ─── Usage & burn rate API ────────────────────────────────────────────────────
 
@@ -961,6 +2036,814 @@ async def set_preferred_model(request: Request):
     db.commit()
     db.close()
     return {"ok": True, "model": model}
+
+# ─── Rate limiting ────────────────────────────────────────────────────────────
+# Simple in-process per-user request rate limiter (requests/minute)
+
+import collections
+_rate_buckets: dict = collections.defaultdict(list)
+RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", "30"))
+
+def check_rate_limit(user_id) -> bool:
+    """Returns True if under limit, False if exceeded."""
+    if not user_id:
+        return True
+    now = time.time()
+    window = [t for t in _rate_buckets[user_id] if now - t < 60]
+    _rate_buckets[user_id] = window
+    if len(window) >= RATE_LIMIT_RPM:
+        return False
+    _rate_buckets[user_id].append(now)
+    return True
+
+
+# ─── Inbound webhooks ─────────────────────────────────────────────────────────
+
+class WebhookCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+    enabled: bool = True
+
+@app.post("/api/webhooks")
+async def create_webhook(req: WebhookCreateRequest, request: Request):
+    """Create a personal inbound webhook that triggers an agent turn."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    token = secrets.token_urlsafe(24)
+    db = get_db()
+    now = int(time.time())
+    db.execute(
+        "INSERT INTO webhooks (user_id, token, name, description, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (uid, token, req.name, req.description, 1 if req.enabled else 0, now)
+    )
+    db.commit()
+    db.close()
+    return {"token": token, "url": f"/api/webhooks/trigger/{token}"}
+
+@app.get("/api/webhooks")
+async def list_webhooks(request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, token, name, description, enabled, created_at FROM webhooks WHERE user_id = ?",
+        (user_data["sub"],)
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+@app.delete("/api/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM webhooks WHERE id = ? AND user_id = ?", (webhook_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+@app.post("/api/webhooks/trigger/{token}")
+async def trigger_webhook(token: str, request: Request):
+    """External POST triggers an agent turn — no auth required (token IS the secret)."""
+    db = get_db()
+    row = db.execute(
+        "SELECT user_id, name, description, enabled FROM webhooks WHERE token = ?", (token,)
+    ).fetchone()
+    db.close()
+    if not row or not row["enabled"]:
+        raise HTTPException(404, "Webhook not found")
+
+    uid = row["user_id"]
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    prompt = body.get("message") or body.get("text") or body.get("content") or f"Webhook '{row['name']}' triggered."
+
+    # Queue as a task (non-blocking) — runs agent loop and delivers via push
+    import asyncio
+    asyncio.get_event_loop().create_task(_run_webhook_turn(uid, prompt, row["name"]))
+    return {"ok": True, "queued": True}
+
+async def _run_webhook_turn(user_id: int, prompt: str, source: str):
+    """Run a headless agent turn for a webhook trigger and push-deliver the response."""
+    import anthropic as ant_lib
+    db = get_db()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    db.close()
+    if not row:
+        return
+
+    onboarding = json.loads(row["onboarding_data"] or "{}")
+    soul = build_soul(row["name"], onboarding) + f"\n\n[Triggered by webhook: {source}]"
+    active_model = resolve_model(row)
+
+    collected = []
+    async def _collect(msg):
+        if msg.get("type") == "chunk":
+            collected.append(msg.get("content", ""))
+
+    try:
+        proxy = CLAUDE_PROXY_URL or (
+            "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+        )
+        client = ant_lib.AsyncAnthropic(
+            api_key="proxy" if proxy else ANTHROPIC_API_KEY,
+            base_url=proxy if proxy else None
+        )
+        from agent_loop import run_agent_loop
+        full, _, _ = await run_agent_loop(
+            messages=[{"role": "user", "content": prompt}],
+            soul=soul, model=active_model, client=client,
+            user_id=user_id, user_context={"tier": row["tier"] or "cloud", "timezone": "UTC", "user_id": user_id},
+            send_fn=_collect, tools_enabled=True,
+        )
+    except Exception:
+        full = "".join(collected) or "[webhook agent error]"
+
+    # Deliver via push
+    try:
+        await _send_expo_push(user_id, f"Ada (webhook: {source})", full[:200])
+    except Exception:
+        pass
+
+    # Deliver to any active WS connections
+    if user_id in _active_connections:
+        for ws in list(_active_connections.get(user_id, set())):
+            try:
+                await ws.send_json({"type": "webhook_response", "source": source, "content": full})
+            except Exception:
+                pass
+
+
+# ─── Skills API ───────────────────────────────────────────────────────────────
+
+@app.get("/api/skills")
+async def list_skills(request: Request):
+    """List available skills from the skills/ directory."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+
+    skills_dir = Path(AGENTS_DIR).parent / "skills"
+    skills = []
+    if skills_dir.exists():
+        for skill_file in sorted(skills_dir.glob("*/SKILL.md")):
+            try:
+                content = skill_file.read_text()
+                # Parse YAML frontmatter
+                meta = {}
+                if content.startswith("---"):
+                    lines = content.splitlines()
+                    try:
+                        end = lines.index("---", 1)
+                        import yaml as _yaml
+                        meta = _yaml.safe_load("\n".join(lines[1:end])) or {}
+                    except Exception:
+                        pass
+                skills.append({
+                    "id": skill_file.parent.name,
+                    "name": meta.get("name", skill_file.parent.name),
+                    "description": meta.get("description", ""),
+                    "version": meta.get("version", "1.0.0"),
+                    "tags": meta.get("tags", []),
+                })
+            except Exception:
+                pass
+    return skills
+
+@app.get("/api/skills/{skill_id}")
+async def get_skill(skill_id: str, request: Request):
+    """Get a skill's content."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+
+    skills_dir = Path(AGENTS_DIR).parent / "skills"
+    skill_file = skills_dir / skill_id / "SKILL.md"
+    if not skill_file.exists():
+        raise HTTPException(404, "Skill not found")
+
+    return {"id": skill_id, "content": skill_file.read_text()}
+
+@app.post("/api/skills/{skill_id}/run")
+async def run_skill(skill_id: str, request: Request):
+    """Inject a skill's content into an agent turn as a prefilled prompt."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+
+    skills_dir = Path(AGENTS_DIR).parent / "skills"
+    skill_file = skills_dir / skill_id / "SKILL.md"
+    if not skill_file.exists():
+        raise HTTPException(404, "Skill not found")
+
+    body = await request.json()
+    args = body.get("args", "")
+    content = skill_file.read_text()
+    prompt = f"[Running skill: {skill_id}]\n\n{content}\n\nArgs: {args}" if args else f"[Running skill: {skill_id}]\n\n{content}"
+
+    # Delegate to /api/chat
+    from fastapi.testclient import TestClient
+    return {"skill_id": skill_id, "prompt_preview": prompt[:200], "tip": "POST to /api/chat with this as content"}
+
+
+# ─── Memory search API ────────────────────────────────────────────────────────
+
+@app.get("/api/memory/search")
+async def search_memory(request: Request, q: str = "", limit: int = 10):
+    """Full-text search across user memory."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    rows = db.execute(
+        "SELECT key, value, category, updated_at FROM user_memory "
+        "WHERE user_id = ? AND (key LIKE ? OR value LIKE ?) ORDER BY updated_at DESC LIMIT ?",
+        (uid, f"%{q}%", f"%{q}%", limit)
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+
+# ─── Memory dream endpoint ────────────────────────────────────────────────────
+
+@app.post("/api/memory/dream")
+async def memory_dream(request: Request):
+    """Manually trigger memory consolidation (dreaming) for the authenticated user."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not USE_ANTHROPIC:
+        raise HTTPException(503, "Memory dreaming requires Anthropic API")
+    uid = user_data["sub"]
+    result = await _run_memory_dream(uid)
+    return result
+
+
+# ─── Standing orders endpoints ────────────────────────────────────────────────
+
+class StandingOrderRequest(BaseModel):
+    instruction: str
+    priority: int = 0
+    enabled: bool = True
+
+@app.post("/api/standing-orders")
+async def create_standing_order(req: StandingOrderRequest, request: Request):
+    """Create a persistent standing order that is injected into every agent turn."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    now = int(time.time())
+    cur = db.execute(
+        "INSERT INTO standing_orders (user_id, instruction, priority, enabled, created_at) VALUES (?, ?, ?, ?, ?)",
+        (uid, req.instruction.strip(), req.priority, 1 if req.enabled else 0, now)
+    )
+    db.commit()
+    order_id = cur.lastrowid
+    db.close()
+    return {"id": order_id, "instruction": req.instruction, "priority": req.priority, "enabled": req.enabled, "created_at": now}
+
+@app.get("/api/standing-orders")
+async def list_standing_orders(request: Request):
+    """List all standing orders for the authenticated user."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, instruction, priority, enabled, created_at FROM standing_orders WHERE user_id = ? ORDER BY priority DESC, id ASC",
+        (user_data["sub"],)
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+@app.delete("/api/standing-orders/{order_id}")
+async def delete_standing_order(order_id: int, request: Request):
+    """Delete a standing order."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM standing_orders WHERE id = ? AND user_id = ?", (order_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+@app.patch("/api/standing-orders/{order_id}")
+async def update_standing_order(order_id: int, request: Request):
+    """Toggle or update a standing order."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    db = get_db()
+    updates, params = [], []
+    for field in ["instruction", "priority", "enabled"]:
+        if field in body:
+            updates.append(f"{field} = ?")
+            params.append(1 if (field == "enabled" and body[field]) else (0 if field == "enabled" else body[field]))
+    if not updates:
+        db.close()
+        raise HTTPException(400, "Nothing to update")
+    params += [order_id, user_data["sub"]]
+    db.execute(f"UPDATE standing_orders SET {', '.join(updates)} WHERE id = ? AND user_id = ?", params)
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Usage dashboard endpoint ─────────────────────────────────────────────────
+
+@app.get("/api/usage/dashboard")
+async def usage_dashboard(request: Request):
+    """
+    Rich usage dashboard: today/week/month costs, token counts,
+    top models, burn rate (7-day avg), estimated monthly cost.
+    """
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    now = int(time.time())
+
+    day_start   = now - 86400
+    week_start  = now - 86400 * 7
+    month_start = now - 86400 * 30
+
+    db = get_db()
+
+    def _sum(since):
+        r = db.execute(
+            "SELECT COALESCE(SUM(cost_usd),0) AS c, COALESCE(SUM(input_tokens),0) AS i, "
+            "COALESCE(SUM(output_tokens),0) AS o, COUNT(*) AS n "
+            "FROM task_logs WHERE user_id = ? AND created_at > ?",
+            (uid, since)
+        ).fetchone()
+        return dict(r)
+
+    today  = _sum(day_start)
+    week   = _sum(week_start)
+    month  = _sum(month_start)
+
+    # Top models this month
+    model_rows = db.execute(
+        "SELECT model, SUM(cost_usd) AS cost, SUM(input_tokens+output_tokens) AS tokens, COUNT(*) AS requests "
+        "FROM task_logs WHERE user_id = ? AND created_at > ? GROUP BY model ORDER BY cost DESC LIMIT 5",
+        (uid, month_start)
+    ).fetchall()
+
+    # Burn rate: daily average over last 7 days
+    daily_costs = db.execute(
+        "SELECT CAST((created_at - ?) / 86400 AS INTEGER) AS day_bucket, SUM(cost_usd) AS daily_cost "
+        "FROM task_logs WHERE user_id = ? AND created_at > ? GROUP BY day_bucket",
+        (week_start, uid, week_start)
+    ).fetchall()
+    db.close()
+
+    costs_list = [r["daily_cost"] for r in daily_costs]
+    burn_rate_per_day = round(sum(costs_list) / max(len(costs_list), 1), 6)
+    estimated_monthly = round(burn_rate_per_day * 30, 4)
+
+    return {
+        "today": {
+            "cost_usd":      round(today["c"], 6),
+            "input_tokens":  today["i"],
+            "output_tokens": today["o"],
+            "requests":      today["n"],
+        },
+        "week": {
+            "cost_usd":      round(week["c"], 6),
+            "input_tokens":  week["i"],
+            "output_tokens": week["o"],
+            "requests":      week["n"],
+        },
+        "month": {
+            "cost_usd":      round(month["c"], 6),
+            "input_tokens":  month["i"],
+            "output_tokens": month["o"],
+            "requests":      month["n"],
+        },
+        "burn_rate_usd_per_day":   burn_rate_per_day,
+        "estimated_monthly_usd":   estimated_monthly,
+        "top_models": [
+            {
+                "model":    r["model"],
+                "cost_usd": round(r["cost"], 6),
+                "tokens":   r["tokens"],
+                "requests": r["requests"],
+            }
+            for r in model_rows
+        ],
+    }
+
+
+# ─── Cron jobs API ────────────────────────────────────────────────────────────
+
+class CronJobRequest(BaseModel):
+    name: str
+    schedule: str        # cron expression e.g. "0 9 * * 1"
+    prompt: str          # agent prompt to run on schedule
+    enabled: bool = True
+    timezone: str = "UTC"
+
+@app.post("/api/cron")
+async def create_cron_job(req: CronJobRequest, request: Request):
+    """Create a scheduled agent cron job."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    now = int(time.time())
+    cur = db.execute(
+        "INSERT INTO cron_jobs (user_id, name, schedule, prompt, enabled, timezone, created_at, last_run) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+        (uid, req.name, req.schedule, req.prompt, 1 if req.enabled else 0, req.timezone, now)
+    )
+    db.commit()
+    job_id = cur.lastrowid
+    db.close()
+    return {"id": job_id, "name": req.name, "schedule": req.schedule}
+
+@app.get("/api/cron")
+async def list_cron_jobs(request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name, schedule, prompt, enabled, timezone, created_at, last_run FROM cron_jobs WHERE user_id = ?",
+        (user_data["sub"],)
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+@app.delete("/api/cron/{job_id}")
+async def delete_cron_job(job_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    db.execute("DELETE FROM cron_jobs WHERE id = ? AND user_id = ?", (job_id, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+@app.patch("/api/cron/{job_id}")
+async def update_cron_job(job_id: int, request: Request):
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    db = get_db()
+    updates = []
+    params = []
+    for field in ["name", "schedule", "prompt", "enabled", "timezone"]:
+        if field in body:
+            updates.append(f"{field} = ?")
+            params.append(1 if (field == "enabled" and body[field]) else body[field])
+    if not updates:
+        db.close()
+        raise HTTPException(400, "Nothing to update")
+    params += [job_id, user_data["sub"]]
+    db.execute(f"UPDATE cron_jobs SET {', '.join(updates)} WHERE id = ? AND user_id = ?", params)
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+# ─── Stripe payment endpoints ─────────────────────────────────────────────────
+
+@app.post("/api/payment/setup-intent")
+async def payment_setup_intent(request: Request):
+    """Create a Stripe SetupIntent so the frontend can capture card details."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(503, "Stripe not configured")
+    import stripe as _stripe
+    _stripe.api_key = STRIPE_SECRET_KEY
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        db.close()
+        raise HTTPException(404, "User not found")
+
+    # Create or retrieve Stripe customer
+    customer_id = user["stripe_customer_id"]
+    if not customer_id:
+        customer = _stripe.Customer.create(
+            email=user["email"],
+            name=user["name"],
+            metadata={"adado_user_id": str(uid)},
+        )
+        customer_id = customer["id"]
+        db.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", (customer_id, uid))
+        db.commit()
+    db.close()
+
+    intent = _stripe.SetupIntent.create(
+        customer=customer_id,
+        payment_method_types=["card"],
+    )
+    return {"client_secret": intent["client_secret"], "publishable_key": STRIPE_PUBLISHABLE_KEY}
+
+
+@app.post("/api/payment/confirm")
+async def payment_confirm(request: Request):
+    """Attach card and create subscription after frontend captures card via Stripe Elements."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID:
+        raise HTTPException(503, "Stripe not configured")
+    import stripe as _stripe
+    _stripe.api_key = STRIPE_SECRET_KEY
+    body = await request.json()
+    setup_intent_id   = body.get("setup_intent_id", "")
+    payment_method_id = body.get("payment_method_id", "")
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user or not user["stripe_customer_id"]:
+        db.close()
+        raise HTTPException(400, "Setup payment intent first")
+    customer_id = user["stripe_customer_id"]
+
+    # Attach payment method as default
+    _stripe.PaymentMethod.attach(payment_method_id, customer=customer_id)
+    _stripe.Customer.modify(
+        customer_id,
+        invoice_settings={"default_payment_method": payment_method_id},
+    )
+
+    # Create subscription
+    sub = _stripe.Subscription.create(
+        customer=customer_id,
+        items=[{"price": STRIPE_PRICE_ID}],
+        default_payment_method=payment_method_id,
+        expand=["latest_invoice.payment_intent"],
+    )
+    sub_id     = sub["id"]
+    sub_status = sub["status"]
+    db.execute(
+        "UPDATE users SET stripe_subscription_id = ?, subscription_status = ? WHERE id = ?",
+        (sub_id, sub_status, uid)
+    )
+    db.commit()
+    db.close()
+    return {"success": True, "subscription_id": sub_id, "status": sub_status}
+
+
+@app.post("/api/payment/webhook")
+async def payment_webhook(request: Request):
+    """Stripe webhook — verify signature and update subscription status."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(503, "Stripe not configured")
+    import stripe as _stripe
+    _stripe.api_key = STRIPE_SECRET_KEY
+    payload   = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    try:
+        event = _stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        raise HTTPException(400, "Invalid webhook signature")
+
+    obj = event["data"]["object"]
+    event_type = event["type"]
+
+    if event_type in ("customer.subscription.updated", "customer.subscription.deleted"):
+        sub_id = obj["id"]
+        status = obj["status"]
+        db = get_db()
+        db.execute(
+            "UPDATE users SET subscription_status = ? WHERE stripe_subscription_id = ?",
+            (status, sub_id)
+        )
+        db.commit()
+        db.close()
+    elif event_type == "invoice.payment_failed":
+        customer_id = obj.get("customer")
+        if customer_id:
+            db = get_db()
+            db.execute(
+                "UPDATE users SET subscription_status = 'past_due' WHERE stripe_customer_id = ?",
+                (customer_id,)
+            )
+            db.commit()
+            db.close()
+
+    return JSONResponse({"received": True})
+
+
+@app.get("/api/payment/status")
+async def payment_status(request: Request):
+    """Return current subscription status for the authenticated user."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    db.close()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    status     = user["subscription_status"] or "free"
+    sub_id     = user["stripe_subscription_id"]
+    next_bill  = None
+    card_last4 = None
+
+    if sub_id and STRIPE_SECRET_KEY:
+        try:
+            import stripe as _stripe
+            _stripe.api_key = STRIPE_SECRET_KEY
+            sub = _stripe.Subscription.retrieve(sub_id, expand=["default_payment_method"])
+            next_bill  = sub.get("current_period_end")
+            pm = sub.get("default_payment_method")
+            if isinstance(pm, dict):
+                card_last4 = pm.get("card", {}).get("last4")
+        except Exception:
+            pass
+
+    return {
+        "status": status,
+        "plan": "pro" if status in ("active", "trialing") else "free",
+        "next_billing_date": next_bill,
+        "card_last4": card_last4,
+    }
+
+
+# ─── Fastmail email endpoints ─────────────────────────────────────────────────
+
+import re as _re
+
+def _sanitize_username(name: str) -> str:
+    """Lowercase and strip non-alphanumeric chars from a display name."""
+    return _re.sub(r"[^a-z0-9]", "", name.lower())[:24] or "user"
+
+
+@app.post("/api/email/provision")
+async def email_provision(request: Request):
+    """Create a Fastmail mailbox for the authenticated user via JMAP."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not FASTMAIL_API_TOKEN or not FASTMAIL_ACCOUNT_ID:
+        raise HTTPException(503, "Fastmail not configured")
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        db.close()
+        raise HTTPException(404, "User not found")
+    if user["email_provisioned"]:
+        db.close()
+        return {"email_address": user["email_address"]}
+
+    # Derive username from display name, de-dupe with numeric suffix if taken
+    base = _sanitize_username(user["name"])
+    username = base
+    import httpx as _httpx
+    for suffix in range(1, 50):
+        # JMAP identity set — check by attempting creation
+        break_outer = False
+        jmap_req = {
+            "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
+            "methodCalls": [[
+                "Identity/set",
+                {
+                    "accountId": FASTMAIL_ACCOUNT_ID,
+                    "create": {
+                        "new1": {
+                            "name": user["name"],
+                            "email": f"{username}@{FASTMAIL_DOMAIN}",
+                        }
+                    }
+                },
+                "0"
+            ]]
+        }
+        async with _httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.fastmail.com/jmap/api/",
+                headers={
+                    "Authorization": f"Bearer {FASTMAIL_API_TOKEN}",
+                    "Content-Type": "application/json",
+                },
+                json=jmap_req,
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            created = (data.get("methodResponses", [[]])[0][1] or {}).get("created", {})
+            errors  = (data.get("methodResponses", [[]])[0][1] or {}).get("notCreated", {})
+            if "new1" in created:
+                break_outer = True
+            elif "new1" in errors and "alreadyExists" in str(errors["new1"]):
+                username = f"{base}{suffix}"
+        if break_outer:
+            break
+
+    email_address = f"{username}@{FASTMAIL_DOMAIN}"
+    db.execute(
+        "UPDATE users SET email_address = ?, email_provisioned = 1 WHERE id = ?",
+        (email_address, uid)
+    )
+    db.commit()
+    db.close()
+    return {"email_address": email_address}
+
+
+class EmailForwardRequest(BaseModel):
+    from_address: str
+
+
+@app.post("/api/email/setup-forward")
+async def email_setup_forward(req: EmailForwardRequest, request: Request):
+    """Store forwarding source address and return step-by-step instructions."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT email_address FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user or not user["email_address"]:
+        db.close()
+        raise HTTPException(400, "Provision your AdaDo email first")
+    target = user["email_address"]
+    db.execute(
+        "INSERT INTO email_forwards (user_id, from_address) VALUES (?, ?)",
+        (uid, req.from_address.strip())
+    )
+    db.commit()
+    db.close()
+
+    from_domain = req.from_address.split("@")[-1].lower() if "@" in req.from_address else ""
+    if "gmail" in from_domain:
+        instructions = (
+            f"To forward Gmail to {target}:\n"
+            "1. Open Gmail → Settings (⚙️) → See all settings\n"
+            "2. Go to Forwarding and POP/IMAP tab\n"
+            "3. Click 'Add a forwarding address' and enter: " + target + "\n"
+            "4. Google will send a verification code — check your AdaDo inbox\n"
+            "5. Once verified, select 'Forward a copy of incoming mail to'\n"
+            "6. Choose what to do with the Gmail copy (keep/archive/delete)\n"
+            "7. Click Save Changes\n\n"
+            "Gmail SMTP settings page: https://mail.google.com/mail/u/0/#settings/fwdandpop"
+        )
+    elif "outlook" in from_domain or "hotmail" in from_domain or "live" in from_domain:
+        instructions = (
+            f"To forward Outlook/Hotmail to {target}:\n"
+            "1. Go to outlook.com → Settings → Mail → Forwarding\n"
+            "2. Enable forwarding and enter: " + target + "\n"
+            "3. Optionally check 'Keep a copy of forwarded messages'\n"
+            "4. Click Save\n"
+        )
+    else:
+        instructions = (
+            f"To forward {req.from_address} to {target}:\n"
+            "1. Log in to your email provider's settings\n"
+            "2. Find 'Forwarding', 'Mail Forwarding', or 'Auto-forward'\n"
+            f"3. Add forwarding address: {target}\n"
+            "4. Confirm any verification email sent to your AdaDo inbox\n"
+            "5. Save and test by sending yourself a message\n"
+        )
+
+    return {"instructions": instructions, "target": target, "from_address": req.from_address}
+
+
+@app.get("/api/email/status")
+async def email_status(request: Request):
+    """Return email provisioning status for the authenticated user."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    uid = user_data["sub"]
+    db = get_db()
+    user = db.execute("SELECT email_address, email_provisioned FROM users WHERE id = ?", (uid,)).fetchone()
+    forwards = db.execute(
+        "SELECT from_address, created_at FROM email_forwards WHERE user_id = ? ORDER BY created_at DESC",
+        (uid,)
+    ).fetchall()
+    db.close()
+    return {
+        "provisioned": bool(user and user["email_provisioned"]),
+        "email_address": user["email_address"] if user else None,
+        "forwards": [dict(r) for r in forwards],
+    }
+
 
 # ─── Static / UI ──────────────────────────────────────────────────────────────
 

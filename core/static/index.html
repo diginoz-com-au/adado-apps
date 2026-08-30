@@ -3,8 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdaDo</title>
+<title>AdaDo — AI assistant that just does it</title>
+<meta name="description" content="AdaDo is your AI assistant for the boring stuff — email, tasks, appointments, bills. Plain English. No setup. No learning curve. Talk to Ada now.">
+<meta name="theme-color" content="#0d0c14">
+<meta property="og:title" content="AdaDo — AI assistant that just does it">
+<meta property="og:description" content="Say what needs doing. Ada handles it. No prompts. No dashboards. No learning curve. 29 languages. Voice and text.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://adadoai.com">
+<meta property="og:image" content="https://adadoai.com/static/logo.svg">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="AdaDo — AI assistant that just does it">
+<meta name="twitter:description" content="Say what needs doing. Ada handles it. Powered by Anthropic Claude.">
 <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="manifest" href="/static/manifest.json">
+<script src="https://js.stripe.com/v3/" async></script>
 <style>
   :root {
     --bg: #0d0c14;
@@ -264,6 +276,74 @@
     transition: color 0.15s;
   }
   .mic-btn:hover { color: var(--text); }
+  .voice-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    font-size: 1rem;
+    line-height: 1;
+    align-self: flex-end;
+    transition: color 0.15s;
+  }
+  .voice-btn:hover { color: var(--accent); }
+  .voice-btn.active { color: #f87171; }
+
+  /* ── Live voice overlay ── */
+  #voice-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(13,12,20,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 200;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+  }
+  #voice-overlay.open { display: flex; }
+  .voice-orb {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #9b8cf8, #6e5bf0 55%, #3a2d9e);
+    box-shadow: 0 0 40px 10px rgba(110,91,240,0.35);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .voice-orb.speaking {
+    animation: orbPulse 0.8s ease-in-out infinite alternate;
+    box-shadow: 0 0 70px 20px rgba(110,91,240,0.5);
+  }
+  .voice-orb.listening {
+    animation: orbBreath 2s ease-in-out infinite;
+  }
+  @keyframes orbPulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.12); }
+  }
+  @keyframes orbBreath {
+    0%,100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+  }
+  .voice-status {
+    font-size: 0.95rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    min-height: 1.5em;
+    text-align: center;
+  }
+  .voice-hang-btn {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: #e53e3e;
+    border: none;
+    cursor: pointer;
+    font-size: 1.4rem;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(229,62,62,0.4);
+    transition: background 0.15s, transform 0.1s;
+  }
+  .voice-hang-btn:hover { background: #c53030; transform: scale(1.07); }
   .input-hint {
     text-align: center;
     font-size: 0.71rem;
@@ -528,7 +608,80 @@
   .done-sub { color:var(--muted); text-align:center; font-size:0.88rem; line-height:1.6; margin-bottom:1.5rem; }
   select.onboard-input { cursor: pointer; }
 
+  /* ── Payment + email onboarding overlay ── */
+  #pay-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72); backdrop-filter: blur(6px);
+    z-index: 200; align-items: center; justify-content: center;
+  }
+  #pay-overlay.open { display: flex; }
+  .pay-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    padding: 2rem 2rem 1.5rem; width: min(420px, 94vw); animation: fadeIn 0.22s ease;
+  }
+  .pay-card h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.2rem; }
+  .pay-card .sub { color: var(--muted); font-size: 0.86rem; margin-bottom: 1.4rem; line-height: 1.5; }
+  .pay-steps { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .pay-step-dot { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background 0.25s; }
+  .pay-step-dot.active { background: var(--accent); }
+  #stripe-card-el { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 1rem; min-height: 42px; }
+  .pay-btn {
+    width: 100%; padding: 0.75rem; background: var(--accent); color: white; border: none;
+    border-radius: 10px; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+    font-family: var(--font); transition: background 0.15s;
+  }
+  .pay-btn:hover { background: var(--accent-dim); }
+  .pay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pay-err { color: #f87171; font-size: 0.82rem; min-height: 1.2em; margin-bottom: 0.5rem; }
+  .pay-field { margin-bottom: 1rem; }
+  .pay-field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.35rem; }
+  .pay-field input {
+    width: 100%; padding: 0.65rem 0.9rem; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-family: var(--font); font-size: 0.9rem; outline: none;
+  }
+  .pay-field input:focus { border-color: var(--accent); }
+  .email-address-box {
+    background: var(--surface2); border: 1px solid var(--accent); border-radius: 10px;
+    padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 1.05rem;
+    font-weight: 700; color: var(--text); text-align: center; letter-spacing: 0.01em;
+  }
+  .pay-instructions {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.75rem 0.9rem; font-size: 0.8rem; color: var(--muted); white-space: pre-wrap;
+    line-height: 1.6; max-height: 220px; overflow-y: auto; margin-bottom: 1rem;
+  }
+  /* ── Proton banner ── */
+  #proton-banner {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 190;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 0.65rem 1.25rem; align-items: center; gap: 0.75rem;
+    font-size: 0.83rem; color: var(--muted);
+  }
+  #proton-banner.open { display: flex; }
+  #proton-banner span { flex: 1; }
+  #proton-banner button { padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-family: var(--font); }
+  #proton-banner .pb-cta { background: var(--accent); color: white; border: none; }
+  #proton-banner .pb-dismiss { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
   /* ── Markdown ── */
+  .tool-indicator {
+    font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0.6rem 0.4rem;
+    display: none; animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+  .bubble.typing-dots { display: flex; align-items: center; gap: 5px; padding: 0.7rem 1rem; min-width: 44px; }
+  .bubble.typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+    animation: typingBounce 1.2s ease-in-out infinite;
+  }
+  .bubble.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .bubble.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-5px); } }
+  .system-msg {
+    text-align: center; font-size: 0.72rem; color: var(--muted);
+    padding: 0.25rem 1rem; opacity: 0.7;
+  }
   .bubble h1,.bubble h2,.bubble h3 { font-weight:700; margin:0.7rem 0 0.2rem; }
   .bubble h1 { font-size:1.05rem; }
   .bubble h2 { font-size:0.97rem; }
@@ -641,12 +794,20 @@
     <div class="input-row">
       <textarea id="input" placeholder="Ada do something…" rows="1"
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input">🎤</button>
+      <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" title="Voice dictation">🎤</button>
+      <button class="voice-btn" id="voice-chat-btn" onclick="startVoiceChat()" title="Live voice call with Ada">📞</button>
       <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
     </div>
     <p class="input-hint">Ada is powered by AI · Conversations are private and never used for training.</p>
   </div>
 </main>
+
+<!-- Live voice chat overlay -->
+<div id="voice-overlay">
+  <div class="voice-orb" id="voice-orb"></div>
+  <div class="voice-status" id="voice-status">Connecting…</div>
+  <button class="voice-hang-btn" onclick="endVoiceChat()" title="End call">📵</button>
+</div>
 
 <!-- App Library modal -->
 <div class="modal-overlay" id="app-library-modal" style="display:none" onclick="if(event.target===this)closeAppLibrary()">
@@ -762,6 +923,46 @@
   </div>
 </div>
 
+<!-- Payment + email onboarding overlay -->
+<div id="pay-overlay">
+  <div class="pay-card" id="pay-card">
+    <div class="pay-steps">
+      <div class="pay-step-dot active" id="psd-0"></div>
+      <div class="pay-step-dot" id="psd-1"></div>
+    </div>
+
+    <!-- Step 1: Payment -->
+    <div id="pay-step-payment">
+      <h2>Start your AdaDo subscription</h2>
+      <p class="sub">$29/mo — cancel anytime. Your card is never stored on our servers.</p>
+      <div id="stripe-card-el"></div>
+      <div class="pay-err" id="pay-err"></div>
+      <button class="pay-btn" id="pay-btn" onclick="doPayment()">Add card &amp; start →</button>
+    </div>
+
+    <!-- Step 2: Email -->
+    <div id="pay-step-email" style="display:none">
+      <h2>Your AdaDo inbox</h2>
+      <p class="sub">You have a personal email address — use it with any app.</p>
+      <div class="email-address-box" id="pay-email-addr">…</div>
+      <div class="pay-field">
+        <label>Forward your old email (optional)</label>
+        <input type="email" id="pay-fwd-input" placeholder="you@gmail.com">
+      </div>
+      <div class="pay-err" id="fwd-err"></div>
+      <div class="pay-instructions" id="fwd-instructions" style="display:none"></div>
+      <button class="pay-btn" id="fwd-btn" onclick="doForward()">Set up forwarding →</button>
+      <button class="pay-btn" style="background:var(--surface2);color:var(--muted);margin-top:0.5rem" onclick="closePayOverlay()">Done, take me to Ada →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Proton upgrade banner -->
+<div id="proton-banner">
+  <span>🔐 Want end-to-end encrypted email? Migrate to Proton — Ada will handle everything.</span>
+  <button class="pb-dismiss" onclick="dismissProtonBanner()">Dismiss</button>
+</div>
+
 <script>
 // ─── State ─────────────────────────────────────────────────────────────────
 let ws = null;
@@ -819,6 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateAuthUI();
   connectWS();
   renderWelcome();
+  if (token) maybeShowPayOverlay();
   document.addEventListener('click', e => {
     if (!e.target.closest('#usage-panel') && !e.target.closest('#usage-btn'))
       document.getElementById('usage-panel').classList.remove('open');
@@ -878,6 +1080,7 @@ function renderWelcome() {
       <span class="suggestion" onclick="sendSuggestion(this)">What can Ada do?</span>
       <span class="suggestion" onclick="sendSuggestion(this)">Add a task</span>
       <span class="suggestion" onclick="sendSuggestion(this)">Summarise my week</span>
+      <span class="suggestion" onclick="startVoiceChat()" title="Live voice chat — 29 languages">🎙️ Talk to Ada</span>
     </div>
     <div class="welcome-apps-label">${appsLabel}</div>
     <div class="app-grid">
@@ -945,6 +1148,27 @@ function removeApp(slug) {
 }
 
 // ─── WebSocket ──────────────────────────────────────────────────────────────
+let _toolIndicator = null;
+
+function showToolIndicator(name) {
+  if (!streamBubble) return;
+  if (!_toolIndicator) {
+    _toolIndicator = document.createElement('div');
+    _toolIndicator.className = 'tool-indicator';
+    streamBubble.parentElement.appendChild(_toolIndicator);
+  }
+  const icons = { web_search: '🔍', web_fetch: '🌐', memory_read: '🧠', memory_write: '💾',
+    reminder_set: '⏰', calculator: '🔢', datetime_now: '🕐', note_create: '📝',
+    tts_speak: '🔊', app_action: '⚙️' };
+  _toolIndicator.textContent = (icons[name] || '⚙️') + ' ' + name.replace(/_/g, ' ') + '…';
+  _toolIndicator.style.display = 'block';
+  scrollBottom();
+}
+
+function hideToolIndicator() {
+  if (_toolIndicator) { _toolIndicator.style.display = 'none'; _toolIndicator = null; }
+}
+
 function handleWSMsg(msg) {
   if (msg.type === 'ready') {
     if (!activeAgent && token && msg.onboarding_complete === false) showOnboarding();
@@ -952,16 +1176,52 @@ function handleWSMsg(msg) {
   }
   if (msg.type === 'start') {
     streaming = true;
-    streamBubble = addBubble('ada', '');
+    // Remove typing dots if already shown
+    if (streamBubble) {
+      streamBubble.classList.remove('typing-dots');
+      streamBubble.innerHTML = '';
+    } else {
+      streamBubble = addBubble('ada', '');
+    }
     document.getElementById('send-btn').disabled = true;
   } else if (msg.type === 'chunk') {
     if (streamBubble) { streamBubble.textContent += msg.content; scrollBottom(); }
+  } else if (msg.type === 'typing') {
+    // Show typing dots before start
+    if (!streamBubble) {
+      streamBubble = addBubble('ada', '');
+      streamBubble.classList.add('typing-dots');
+      streamBubble.innerHTML = '<span></span><span></span><span></span>';
+      scrollBottom();
+    }
+    return;
+  } else if (msg.type === 'system') {
+    // Non-blocking system message (compaction, model switch, etc.)
+    const el = document.createElement('div');
+    el.className = 'system-msg';
+    el.textContent = msg.message || '';
+    document.getElementById('msgs').appendChild(el);
+    scrollBottom();
+    return;
+  } else if (msg.type === 'tool_calls') {
+    // Ada is about to call tools — nothing visible needed, indicator follows
+  } else if (msg.type === 'tool_running') {
+    showToolIndicator(msg.name || '');
+  } else if (msg.type === 'tool_done') {
+    hideToolIndicator();
+  } else if (msg.type === 'reminder') {
+    // Reminder fired — show as a notification bubble
+    const text = msg.label ? `⏰ Reminder: ${msg.label}\n${msg.message}` : `⏰ ${msg.message}`;
+    addBubble('ada', text);
+    scrollBottom();
   } else if (msg.type === 'done') {
+    hideToolIndicator();
     streaming = false;
     finaliseAdaBubble(streamBubble);
     streamBubble = null;
     document.getElementById('send-btn').disabled = false;
   } else if (msg.type === 'error') {
+    hideToolIndicator();
     if (streamBubble) { finaliseAdaBubble(streamBubble); streamBubble = null; }
     addBubble('ada', '⚠️ ' + (msg.content || msg.message || 'Something went wrong'));
     document.getElementById('send-btn').disabled = false;
@@ -1077,6 +1337,111 @@ function toggleVoice() {
   recognition.onend    = () => { listening = false; btn.textContent = '🎤'; if (input.value.trim()) sendMessage(); };
   recognition.onerror  = () => { recognition.stop(); };
   recognition.start();
+}
+
+// ─── ElevenLabs live voice chat ─────────────────────────────────────────────
+let _voiceConversation = null;
+let _voiceStartTime    = null;
+
+async function startVoiceChat() {
+  if (_voiceConversation) return; // already active
+  const btn    = document.getElementById('voice-chat-btn');
+  const overlay= document.getElementById('voice-overlay');
+  const orb    = document.getElementById('voice-orb');
+  const status = document.getElementById('voice-status');
+
+  overlay.classList.add('open');
+  btn.classList.add('active');
+  status.textContent = 'Connecting…';
+  orb.className = 'voice-orb';
+
+  let signedUrl;
+  try {
+    const token = localStorage.getItem('adado_token') || sessionStorage.getItem('adado_token') || '';
+    const res = await fetch('/api/voice/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({detail: res.statusText}));
+      throw new Error(err.detail || 'Voice session failed');
+    }
+    const data = await res.json();
+    signedUrl = data.signed_url;
+  } catch(e) {
+    status.textContent = 'Could not start voice: ' + e.message;
+    setTimeout(() => _closeVoiceOverlay(), 3000);
+    return;
+  }
+
+  // Dynamically load the ElevenLabs client SDK
+  let ELClient;
+  try {
+    ELClient = await import('https://esm.sh/@11labs/client@0.0.7');
+  } catch(e) {
+    status.textContent = 'Could not load voice library.';
+    setTimeout(() => _closeVoiceOverlay(), 3000);
+    return;
+  }
+
+  try {
+    _voiceStartTime = Date.now();
+    _voiceConversation = await ELClient.Conversation.startSession({
+      signedUrl,
+      onConnect: () => {
+        status.textContent = 'Listening…';
+        orb.className = 'voice-orb listening';
+      },
+      onDisconnect: () => {
+        status.textContent = 'Call ended.';
+        setTimeout(() => _closeVoiceOverlay(), 1200);
+      },
+      onError: (err) => {
+        status.textContent = 'Voice error — ' + (err?.message || String(err));
+        setTimeout(() => _closeVoiceOverlay(), 2500);
+      },
+      onModeChange: (mode) => {
+        if (mode.mode === 'speaking') {
+          status.textContent = 'Ada is speaking…';
+          orb.className = 'voice-orb speaking';
+        } else {
+          status.textContent = 'Listening…';
+          orb.className = 'voice-orb listening';
+        }
+      },
+    });
+  } catch(e) {
+    status.textContent = 'Mic access denied or connection failed.';
+    setTimeout(() => _closeVoiceOverlay(), 3000);
+    _voiceConversation = null;
+  }
+}
+
+async function endVoiceChat() {
+  if (_voiceConversation) {
+    try { await _voiceConversation.endSession(); } catch(_) {}
+  }
+  const duration = _voiceStartTime ? Math.round((Date.now() - _voiceStartTime) / 1000) : 0;
+  if (duration > 0) {
+    try {
+      const token = localStorage.getItem('adado_token') || sessionStorage.getItem('adado_token') || '';
+      await fetch('/api/voice/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ duration_secs: duration })
+      });
+    } catch(_) {}
+  }
+  _closeVoiceOverlay();
+}
+
+function _closeVoiceOverlay() {
+  _voiceConversation = null;
+  _voiceStartTime    = null;
+  document.getElementById('voice-overlay').classList.remove('open');
+  document.getElementById('voice-chat-btn').classList.remove('active');
+  document.getElementById('voice-orb').className = 'voice-orb';
+  document.getElementById('voice-status').textContent = 'Connecting…';
 }
 
 // ─── Apps ───────────────────────────────────────────────────────────────────
@@ -1241,6 +1606,7 @@ async function doAuth() {
     closeAuth();
     connectWS();
     renderWelcome();
+    maybeShowPayOverlay();
   } catch(e) { errEl.textContent = 'Connection error'; }
 }
 
@@ -1298,6 +1664,161 @@ async function doOnboard(skip = false) {
     return;
   }
   if (skip) closeOnboard(); else obSetStep(3);
+}
+
+// ─── Payment + email onboarding ─────────────────────────────────────────────
+let _stripe = null;
+let _cardEl = null;
+let _payClientSecret = null;
+
+function _payStepDots(active) {
+  [0,1].forEach(i => document.getElementById(`psd-${i}`).classList.toggle('active', i <= active));
+}
+
+async function maybeShowPayOverlay() {
+  if (!token) return;
+  try {
+    const [payRes, emailRes] = await Promise.all([
+      fetch('/api/payment/status', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch('/api/email/status',   { headers: { 'Authorization': `Bearer ${token}` } }),
+    ]);
+    const pay   = payRes.ok   ? await payRes.json()   : {};
+    const email = emailRes.ok ? await emailRes.json() : {};
+
+    const needsPay   = !pay.plan || pay.plan === 'free';
+    const needsEmail = !email.provisioned;
+
+    if (needsPay || needsEmail) {
+      document.getElementById('pay-overlay').classList.add('open');
+      if (!needsPay && needsEmail) {
+        showPayStepEmail();
+      } else {
+        await initStripeElement();
+      }
+    } else if (email.provisioned && !localStorage.getItem('proton_banner_dismissed')) {
+      document.getElementById('proton-banner').classList.add('open');
+    }
+  } catch(e) {}
+}
+
+async function initStripeElement() {
+  // Wait for Stripe.js to load
+  let attempts = 0;
+  while (typeof Stripe === 'undefined' && attempts < 30) {
+    await new Promise(r => setTimeout(r, 200));
+    attempts++;
+  }
+  if (typeof Stripe === 'undefined') {
+    document.getElementById('pay-err').textContent = 'Stripe.js failed to load. Please refresh.';
+    return;
+  }
+  try {
+    const res = await fetch('/api/payment/setup-intent', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      document.getElementById('pay-err').textContent = d.detail || 'Could not initialise payment.';
+      return;
+    }
+    const { client_secret, publishable_key } = await res.json();
+    _payClientSecret = client_secret;
+    _stripe = Stripe(publishable_key);
+    const elements = _stripe.elements();
+    _cardEl = elements.create('card', {
+      style: {
+        base: { color: '#f0eeff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '15px', '::placeholder': { color: '#8b80c0' } },
+        invalid: { color: '#f87171' },
+      }
+    });
+    _cardEl.mount('#stripe-card-el');
+  } catch(e) {
+    document.getElementById('pay-err').textContent = 'Could not connect to payment service.';
+  }
+}
+
+async function doPayment() {
+  const btn = document.getElementById('pay-btn');
+  const err = document.getElementById('pay-err');
+  err.textContent = '';
+  if (!_stripe || !_cardEl || !_payClientSecret) { err.textContent = 'Payment not ready yet.'; return; }
+  btn.disabled = true; btn.textContent = 'Processing…';
+  try {
+    const { setupIntent, error } = await _stripe.confirmCardSetup(_payClientSecret, {
+      payment_method: { card: _cardEl },
+    });
+    if (error) { err.textContent = error.message; btn.disabled = false; btn.textContent = 'Add card & start →'; return; }
+    const pm_id = setupIntent.payment_method;
+    const res = await fetch('/api/payment/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ setup_intent_id: setupIntent.id, payment_method_id: pm_id }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.detail || 'Payment failed.'; btn.disabled = false; btn.textContent = 'Add card & start →'; return; }
+    await showPayStepEmail();
+  } catch(e) { err.textContent = 'Payment error. Please try again.'; btn.disabled = false; btn.textContent = 'Add card & start →'; }
+}
+
+async function showPayStepEmail() {
+  document.getElementById('pay-step-payment').style.display = 'none';
+  document.getElementById('pay-step-email').style.display  = 'block';
+  _payStepDots(1);
+  document.getElementById('pay-email-addr').textContent = '…provisioning…';
+  try {
+    const res = await fetch('/api/email/provision', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const d = await res.json();
+      document.getElementById('pay-email-addr').textContent = d.email_address;
+    } else {
+      document.getElementById('pay-email-addr').textContent = '(provisioning failed — contact support)';
+    }
+  } catch(e) {
+    document.getElementById('pay-email-addr').textContent = '(network error)';
+  }
+}
+
+async function doForward() {
+  const input = document.getElementById('pay-fwd-input').value.trim();
+  const err   = document.getElementById('fwd-err');
+  const btn   = document.getElementById('fwd-btn');
+  err.textContent = '';
+  if (!input || !input.includes('@')) { err.textContent = 'Enter a valid email address.'; return; }
+  btn.disabled = true; btn.textContent = 'Setting up…';
+  try {
+    const res = await fetch('/api/email/setup-forward', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ from_address: input }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      const box = document.getElementById('fwd-instructions');
+      box.textContent = d.instructions;
+      box.style.display = 'block';
+      btn.textContent = 'Updated';
+    } else {
+      const d = await res.json();
+      err.textContent = d.detail || 'Error setting up forward.';
+      btn.disabled = false; btn.textContent = 'Set up forwarding →';
+    }
+  } catch(e) { err.textContent = 'Network error.'; btn.disabled = false; btn.textContent = 'Set up forwarding →'; }
+}
+
+function closePayOverlay() {
+  document.getElementById('pay-overlay').classList.remove('open');
+  if (!localStorage.getItem('proton_banner_dismissed')) {
+    document.getElementById('proton-banner').classList.add('open');
+  }
+}
+
+function dismissProtonBanner() {
+  localStorage.setItem('proton_banner_dismissed', '1');
+  document.getElementById('proton-banner').classList.remove('open');
 }
 </script>
 </body>
