@@ -1,4 +1,5 @@
 id: adado-trading
+chat_endpoint: /ws/chat?agent=trading-agent
 name: AdaDo Trading
 description: Let Ada monitor and adjust automated crypto strategies in Freqtrade — open-source, backtested, always on.
 category: crypto trading bot

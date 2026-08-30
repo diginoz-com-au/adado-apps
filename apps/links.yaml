@@ -1,4 +1,5 @@
 id: adado-links
+chat_endpoint: /ws/chat?agent=links-agent
 name: Link Manager
 description: Let Ada save, tag, and search bookmarks in Linkwarden — your permanent, self-hosted link archive.
 category: productivity

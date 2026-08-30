@@ -1,4 +1,5 @@
 id: adado-files
+chat_endpoint: /ws/chat?agent=files-agent
 name: AdaDo Files
 description: Let Ada upload, share, and organise files in Nextcloud — your own file cloud, no Google Drive or Dropbox needed.
 category: file cloud

@@ -1,4 +1,5 @@
 id: adado-dream-catcher
+chat_endpoint: /ws/chat?agent=dream-catcher-agent
 name: Dream Catcher
 description: Ada's native idea capture tool — voice a thought, sketch an idea, and Ada turns it into tasks and plans automatically.
 category: productivity

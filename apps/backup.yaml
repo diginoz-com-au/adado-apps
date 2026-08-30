@@ -1,4 +1,5 @@
 id: adado-backup
+is_core: true
 name: Backup
 description: Let Ada schedule and verify encrypted backups via Duplicati — set it once, never lose data.
 category: infrastructure

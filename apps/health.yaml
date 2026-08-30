@@ -1,4 +1,5 @@
 id: adado-health
+chat_endpoint: /ws/chat?agent=health-agent
 name: Health
 description: Let Ada log and query your health metrics from Garmin Connect — activity, sleep, heart rate, and trends in one place.
 category: health
