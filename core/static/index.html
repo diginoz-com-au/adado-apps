@@ -480,6 +480,54 @@
   .done-h { font-size:1.6rem; font-weight:800; text-align:center; margin-bottom:0.5rem; }
   .done-sub { color:var(--muted); text-align:center; font-size:0.9rem; line-height:1.6; margin-bottom:1.75rem; }
   select.onboard-input { cursor: pointer; }
+
+  /* ── Chat items (sidebar thread switcher) ── */
+  .chat-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 0.875rem; color: var(--muted);
+    transition: background 0.15s;
+    margin: 0 6px;
+  }
+  .chat-item:hover { background: var(--surface2); color: var(--text); }
+  .chat-item.active { background: rgba(110,91,240,0.15); color: var(--text); }
+  .chat-item .ci-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+  .chat-item .ci-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-item .ci-badge { font-size: 0.7rem; background: var(--accent); color: white; border-radius: 10px; padding: 1px 6px; display: none; }
+  .chat-item.active .ci-badge { display: inline; }
+  .sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 12px; }
+  .sidebar-section {
+    font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); padding: 12px 12px 4px; font-weight: 600;
+  }
+  .app-chat-list { flex: 1; overflow-y: auto; padding-bottom: 0.5rem; }
+  .sidebar-footer { padding: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar-add-btn {
+    width: 100%; padding: 8px 12px;
+    background: transparent; border: 1px dashed var(--border);
+    border-radius: 8px; color: var(--muted); font-size: 0.84rem;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+    font-family: var(--font);
+  }
+  .sidebar-add-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── App Library modal tiles ── */
+  .lib-tiles {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem; margin-top: 0.75rem; max-height: 60vh; overflow-y: auto;
+  }
+  .lib-tile {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0.75rem 0.5rem; cursor: pointer;
+    transition: all 0.15s; display: flex; flex-direction: column;
+    align-items: center; gap: 0.35rem; text-align: center;
+  }
+  .lib-tile:hover { border-color: var(--accent); background: rgba(110,91,240,0.08); }
+  .lib-tile.enabled { border-color: var(--accent); background: rgba(110,91,240,0.12); cursor: default; }
+  .lib-tile .lt-icon { font-size: 1.5rem; }
+  .lib-tile .lt-name { font-size: 0.79rem; color: var(--muted); }
+  .lib-tile.enabled .lt-name { color: var(--text); }
+  .lib-tile .lt-action { font-size: 0.71rem; color: var(--accent); font-weight: 600; margin-top: 0.1rem; }
 </style>
 </head>
 <body>
@@ -528,10 +576,17 @@
       <img src="/static/logo.svg" width="20" height="20" alt="">
       <span>AdaDo</span>
     </div>
-    <button class="sidebar-chat-btn" onclick="openChat()">💬 Chat with Ada</button>
-    <div class="sidebar-section">App Library</div>
-    <div class="app-list" id="app-list">
+    <div class="chat-item active" id="ci-general" onclick="switchThread('general')">
+      <span class="ci-icon">⚡</span>
+      <span class="ci-name">General</span>
+    </div>
+    <hr class="sidebar-divider">
+    <div class="sidebar-section">Apps</div>
+    <div class="app-chat-list" id="app-chat-list">
       <!-- populated by JS -->
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-add-btn" onclick="openAppLibrary()">+ App Library</button>
     </div>
   </aside>
 
@@ -577,6 +632,18 @@
     </div>
     <p style="text-align:center;font-size:0.72rem;color:var(--muted);padding:0.35rem 1rem 0.5rem;flex-shrink:0;">Ada is powered by AI. Conversations are private and never used for training.</p>
   </main>
+</div>
+
+<!-- App Library modal -->
+<div class="modal-overlay" id="app-library-modal" style="display:none" onclick="if(event.target===this)closeAppLibrary()">
+  <div class="modal" style="width:540px;max-width:95vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+      <h2>App Library</h2>
+      <button class="btn-sm" onclick="closeAppLibrary()">✕</button>
+    </div>
+    <p>Enable an app to open a dedicated chat thread in your sidebar.</p>
+    <div class="lib-tiles" id="lib-tiles"></div>
+  </div>
 </div>
 
 <!-- Onboarding wizard -->
@@ -691,6 +758,14 @@ let token = localStorage.getItem('adado_token');
 let userName = localStorage.getItem('adado_name');
 let _appsCache = [];
 
+// ─── Thread state ─────────────────────────────────────────────────────────────
+const threads = { general: [] };
+const threadMeta = {
+  general: { name: 'General', icon: '⚡', placeholder: 'Message Ada… (or tap 🎤)' }
+};
+let activeThread = 'general';
+const threadFirstSent = new Set(['general']);
+
 // ─── Markdown renderer ───────────────────────────────────────────────────────
 function renderMarkdown(text) {
   let s = text
@@ -746,6 +821,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ─── Thread switching ─────────────────────────────────────────────────────────
+function switchThread(key) {
+  if (key === activeThread) return;
+
+  // Save current DOM messages
+  threads[activeThread] = captureMessages();
+
+  // Update sidebar highlights
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`ci-${key}`);
+  if (target) target.classList.add('active');
+
+  activeThread = key;
+
+  // Restore messages (or welcome screen)
+  restoreMessages(threads[key], key);
+
+  // Update input placeholder
+  const meta = threadMeta[key];
+  const input = document.getElementById('input');
+  if (meta) input.placeholder = meta.placeholder;
+  input.focus();
+}
+
+function captureMessages() {
+  const msgs = document.getElementById('messages');
+  const result = [];
+  msgs.querySelectorAll('.msg').forEach(msgEl => {
+    result.push({ outerHTML: msgEl.outerHTML });
+  });
+  return result;
+}
+
+function restoreMessages(savedMsgs, key) {
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = '';
+
+  if (!savedMsgs || savedMsgs.length === 0) {
+    if (key === 'general') {
+      msgs.innerHTML = buildGeneralWelcome();
+    } else {
+      const meta = threadMeta[key] || {};
+      const name = escapeHtml(meta.name || key);
+      const icon = meta.icon || '🔲';
+      msgs.innerHTML = `<div class="welcome" id="welcome">
+        <div class="welcome-icon"><span style="font-size:3rem">${icon}</span></div>
+        <h2>${name}</h2>
+        <p>Ask Ada about ${name}. Your conversation stays here.</p>
+      </div>`;
+    }
+    return;
+  }
+
+  savedMsgs.forEach(({ outerHTML }) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = outerHTML;
+    const msgEl = tmp.firstElementChild;
+    if (msgEl) msgs.appendChild(msgEl);
+  });
+  scrollBottom();
+}
+
+function buildGeneralWelcome() {
+  const firstName = (userName || '').split(' ')[0];
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)}. What do you need done?` : 'What do you need done?';
+  const appsForTiles = _appsCache.length > 0 ? _appsCache : [
+    {icon:'💬',name:'Chat'},{icon:'📋',name:'Projects'},{icon:'🔒',name:'Passwords'},
+    {icon:'💰',name:'Finance'},{icon:'📧',name:'Email'},{icon:'👥',name:'CRM'},
+    {icon:'🏠',name:'Home Automation'},{icon:'📈',name:'Trading'},{icon:'✍️',name:'Writing'},
+  ];
+  const tileHTML = appsForTiles.slice(0, 9).map(app => {
+    const emoji = app.icon || app.emoji || '🔲';
+    const safeName = (app.name || '').replace(/'/g, "\\'");
+    const safeDesc = (app.description || '').replace(/'/g, "\\'");
+    return `<div class="app-tile" onclick="askAboutApp('${safeName}','${safeDesc}')"><span class="tile-icon">${emoji}</span><span>${escapeHtml(app.name)}</span></div>`;
+  }).join('');
+  return `<div class="welcome" id="welcome">
+    <div class="welcome-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="64" height="64">
+        <defs><linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6e5bf0"/><stop offset="100%" style="stop-color:#a78bfa"/></linearGradient></defs>
+        <rect width="48" height="48" rx="14" fill="#1e1b2e"/>
+        <polygon points="24,7 39,41 9,41" fill="none" stroke="url(#wg)" stroke-width="3.5" stroke-linejoin="round"/>
+        <line x1="14" y1="31" x2="34" y2="31" stroke="url(#wg)" stroke-width="3"/>
+        <circle cx="39" cy="8" r="5" fill="#6e5bf0"/>
+      </svg>
+    </div>
+    <h2 id="welcome-h">${greeting}</h2>
+    <p>Just say it in plain English. Ada handles the rest — no setup, no docs, no learning curve.</p>
+    <div class="suggestions">
+      <span class="suggestion" onclick="sendSuggestion(this)">What's on my plate today?</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">Check my recent emails</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">Add a task to my projects</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">How's my budget looking?</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">What can Ada do?</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">Summarise my week</span>
+    </div>
+    <div style="font-size:0.72rem;color:var(--muted);text-align:left;margin:1rem 0 0.4rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Your App Library — market-leading tools, each with its own Ada agent. Click Add to enable.</div>
+    <div class="app-tiles" id="welcome-tiles">${tileHTML}</div>
+  </div>`;
+}
 
 function updateAuthUI() {
   const btn = document.getElementById('auth-btn');
@@ -848,7 +1024,15 @@ function sendMessage() {
   input.value = '';
   autoResize(input);
 
-  ws.send(JSON.stringify({ content: text }));
+  // Prepend app context on first message in a non-general thread
+  let payload = text;
+  if (!threadFirstSent.has(activeThread)) {
+    const meta = threadMeta[activeThread] || {};
+    payload = `[App: ${meta.name || activeThread}] ${text}`;
+    threadFirstSent.add(activeThread);
+  }
+
+  ws.send(JSON.stringify({ content: payload }));
 }
 
 // ─── Voice input ──────────────────────────────────────────────────────────────
@@ -957,52 +1141,136 @@ function openChat() {
 }
 
 // ─── Apps ────────────────────────────────────────────────────────────────────
+const _defaultApps = [
+  { icon: '💬', name: 'Chat',           slug: 'chat' },
+  { icon: '📋', name: 'Projects',       slug: 'projects' },
+  { icon: '🔒', name: 'Passwords',      slug: 'passwords' },
+  { icon: '💰', name: 'Finance',        slug: 'finance' },
+  { icon: '📧', name: 'Email',          slug: 'email' },
+  { icon: '👥', name: 'CRM',            slug: 'crm' },
+  { icon: '🏠', name: 'Home Automation',slug: 'home-automation' },
+  { icon: '📈', name: 'Trading',        slug: 'trading' },
+  { icon: '✍️', name: 'Writing',        slug: 'writing' },
+  { icon: '🔍', name: 'Research',       slug: 'research' },
+  { icon: '💻', name: 'Code & Dev',     slug: 'code-dev' },
+  { icon: '📱', name: 'Social Media',   slug: 'social-media' },
+];
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 async function loadApps() {
   try {
     const res = await fetch('/api/apps');
     const apps = await res.json();
-    _appsCache = apps;
-    const list = document.getElementById('app-list');
-    list.innerHTML = '';
-    const allApps = apps.length > 0 ? apps : [
-      { icon: '💬', name: 'Chat' }, { icon: '📋', name: 'Projects' },
-      { icon: '🔒', name: 'Passwords' }, { icon: '💰', name: 'Finance' },
-      { icon: '📧', name: 'Email' }, { icon: '👥', name: 'CRM' },
-    ];
-    allApps.forEach(app => {
-      const emoji = app.icon || app.emoji || '🔲';
-      const el = document.createElement('div');
-      el.className = 'app-item';
-      el.innerHTML = `<span class="app-emoji">${emoji}</span><span>${app.name}</span>`;
-      el.onclick = () => {
-        document.querySelectorAll('.app-item').forEach(i => i.classList.remove('active'));
-        el.classList.add('active');
-        askAboutApp(app.name, app.description);
-      };
-      list.appendChild(el);
-    });
-    // Populate welcome tiles (first 9)
-    const tiles = document.getElementById('welcome-tiles');
-    if (tiles) {
-      tiles.innerHTML = '';
-      allApps.slice(0, 9).forEach(app => {
-        const emoji = app.icon || app.emoji || '🔲';
-        const t = document.createElement('div');
-        t.className = 'app-tile';
-        t.innerHTML = `<span class="tile-icon">${emoji}</span><span>${app.name}</span>`;
-        t.onclick = () => askAboutApp(app.name, app.description);
-        tiles.appendChild(t);
-      });
-    }
+    _appsCache = apps.length > 0 ? apps : _defaultApps;
   } catch(e) {
+    _appsCache = _defaultApps;
     console.log('Apps load error:', e);
   }
+
+  // Top 5 from API/defaults go into sidebar
+  const sidebarApps = [..._appsCache.slice(0, 5)];
+
+  // Merge locally-enabled extras
+  const localEnabled = JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');
+  localEnabled.forEach(slug => {
+    const found = _appsCache.find(a => (a.slug || slugify(a.name)) === slug);
+    if (found) {
+      const fSlug = found.slug || slugify(found.name);
+      if (!sidebarApps.find(a => (a.slug || slugify(a.name)) === fSlug)) {
+        sidebarApps.push(found);
+      }
+    }
+  });
+
+  sidebarApps.forEach(app => addAppToSidebar(app));
+
+  // Update welcome tiles if still on initial general welcome
+  const tiles = document.getElementById('welcome-tiles');
+  if (tiles && activeThread === 'general') {
+    tiles.innerHTML = '';
+    _appsCache.slice(0, 9).forEach(app => {
+      const emoji = app.icon || app.emoji || '🔲';
+      const t = document.createElement('div');
+      t.className = 'app-tile';
+      t.innerHTML = `<span class="tile-icon">${emoji}</span><span>${escapeHtml(app.name)}</span>`;
+      t.onclick = () => askAboutApp(app.name, app.description || '');
+      tiles.appendChild(t);
+    });
+  }
+}
+
+function addAppToSidebar(app) {
+  const slug = app.slug || slugify(app.name);
+  if (document.getElementById(`ci-${slug}`)) return; // already present
+
+  const emoji = app.icon || app.emoji || '🔲';
+  if (!threads[slug]) threads[slug] = [];
+  threadMeta[slug] = {
+    name: app.name,
+    icon: emoji,
+    placeholder: `Ask Ada about ${app.name}…`,
+    slug
+  };
+
+  const list = document.getElementById('app-chat-list');
+  const el = document.createElement('div');
+  el.className = 'chat-item';
+  el.id = `ci-${slug}`;
+  el.innerHTML = `<span class="ci-icon">${emoji}</span><span class="ci-name">${escapeHtml(app.name)}</span>`;
+  el.onclick = () => switchThread(slug);
+  list.appendChild(el);
 }
 
 function askAboutApp(name, desc) {
   const q = desc ? `Tell me about the ${name} app and what I can do with it.` : `What can you do with ${name}?`;
   document.getElementById('input').value = q;
   sendMessage();
+}
+
+// ─── App Library ──────────────────────────────────────────────────────────────
+function openAppLibrary() {
+  const modal = document.getElementById('app-library-modal');
+  const tiles = document.getElementById('lib-tiles');
+  const enabledSlugs = new Set(Object.keys(threads).filter(k => k !== 'general'));
+
+  const allApps = _appsCache.length > 0 ? _appsCache : _defaultApps;
+  tiles.innerHTML = '';
+  allApps.forEach(app => {
+    const slug = app.slug || slugify(app.name);
+    const emoji = app.icon || app.emoji || '🔲';
+    const isEnabled = enabledSlugs.has(slug);
+
+    const tile = document.createElement('div');
+    tile.className = `lib-tile${isEnabled ? ' enabled' : ''}`;
+    tile.id = `lt-${slug}`;
+    tile.innerHTML = `
+      <span class="lt-icon">${emoji}</span>
+      <span class="lt-name">${escapeHtml(app.name)}</span>
+      <span class="lt-action">${isEnabled ? '✓ Added' : '+ Enable'}</span>
+    `;
+    if (!isEnabled) {
+      tile.onclick = () => {
+        addAppToSidebar(app);
+        const stored = JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');
+        if (!stored.includes(slug)) {
+          stored.push(slug);
+          localStorage.setItem('adado_enabled_apps', JSON.stringify(stored));
+        }
+        closeAppLibrary();
+        switchThread(slug);
+      };
+    }
+    tiles.appendChild(tile);
+  });
+
+  modal.style.display = 'flex';
+}
+
+function closeAppLibrary() {
+  document.getElementById('app-library-modal').style.display = 'none';
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
