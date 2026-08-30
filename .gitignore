@@ -1,4 +1,6 @@
 harness/.env
+harness/docker-compose.override.yml
+core/.env
 browser/
 harness/*.env.*
 *.bak-*

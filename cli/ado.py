@@ -26,6 +26,8 @@ INSTANCE_DEFAULT = "https://adado.diginoz.com.au"
 
 PURPLE  = "\033[38;5;99m"
 LPURPLE = "\033[38;5;141m"
+GREEN   = "\033[38;5;40m"
+LGREEN  = "\033[38;5;83m"
 MUTED   = "\033[38;5;245m"
 BOLD    = "\033[1m"
 DIM     = "\033[2m"
@@ -39,7 +41,7 @@ if sys.platform == "win32":
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
-        PURPLE = LPURPLE = MUTED = BOLD = DIM = RESET = CLEAR = ""
+        PURPLE = LPURPLE = GREEN = LGREEN = MUTED = BOLD = DIM = RESET = CLEAR = ""
 
 def logo():
     return f"""{PURPLE}
@@ -231,59 +233,58 @@ def cmd_login(cfg: dict, args):
     except Exception as e:
         print(f"\n  {MUTED}✗ Login failed: {e}{RESET}\n")
 
-def cmd_chat(cfg: dict):
-    """Interactive streaming chat via WebSocket."""
-    instance = get_instance(cfg)
-    token = get_token(cfg)
-
-    # Parse host/port/path from instance URL
-    use_ssl = instance.startswith("https://")
+def _parse_instance(instance: str):
+    use_ssl   = instance.startswith("https://")
     host_part = instance.replace("https://", "").replace("http://", "")
     if "/" in host_part:
-        host_only, base_path = host_part.split("/", 1)
-        base_path = "/" + base_path
+        host_only, tail = host_part.split("/", 1)
+        base_path = "/" + tail
     else:
-        host_only = host_part
-        base_path = ""
-
+        host_only, base_path = host_part, ""
     if ":" in host_only:
-        host, port_str = host_only.rsplit(":", 1)
-        port = int(port_str)
+        host, port = host_only.rsplit(":", 1)
+        port = int(port)
     else:
-        host = host_only
-        port = 443 if use_ssl else 80
+        host, port = host_only, (443 if use_ssl else 80)
+    return host, port, base_path, use_ssl
 
-    ws_path = f"{base_path}/ws/chat"
 
-    print(CLEAR)
-    print(logo())
-    print(f"  {MUTED}Connecting to {instance}...{RESET}")
+def cmd_chat(cfg: dict):
+    """Full-screen TUI chat via WebSocket."""
+    instance = get_instance(cfg)
+    token    = get_token(cfg)
+    host, port, base_path, use_ssl = _parse_instance(instance)
+    ws_path  = base_path + "/ws/chat"
 
+    print(CLEAR + logo() + f"  {MUTED}Connecting...{RESET}")
     try:
         sock = ws_connect(host, port, ws_path, use_ssl=use_ssl, token=token)
     except Exception as e:
-        print(f"\n  {MUTED}✗ Could not connect: {e}{RESET}")
-        print(f"  {MUTED}Try: ado config instance <your-ada-url>{RESET}\n")
+        print(f"\n  {MUTED}✗ {e}{RESET}\n  {MUTED}Try: ado login{RESET}\n")
         return
 
-    # Read the "ready" frame
+    ada_name = "Ada"; model_name = ""; user_name = ""
     try:
         _, frame = ws_recv_frame(sock)
-        data = json.loads(frame)
-        ada_name = data.get("name", "Ada")
+        d = json.loads(frame)
+        ada_name   = d.get("name",  "Ada")
+        model_name = d.get("model", "").split("/")[-1]
+        user_name  = d.get("user",  "")
     except Exception:
-        ada_name = "Ada"
+        pass
 
-    print(f"\033[2K\r  {PURPLE}● Connected to {ada_name}{RESET}")
-    print(f"  {MUTED}Type a message. Ctrl+C or 'exit' to quit.{RESET}\n")
+    # ── shared state ──────────────────────────────────────────────────────────
+    msgs   = []                         # list of (role, text): "ada"|"you"|"sys"
+    stream = {"active": False, "buf": ""}
+    lock   = threading.Lock()
+    dirty  = threading.Event(); dirty.set()
+    alive  = threading.Event(); alive.set()
 
     def recv_loop():
-        buf = ""
-        in_stream = False
         try:
-            while True:
+            while alive.is_set():
                 opcode, frame = ws_recv_frame(sock)
-                if opcode == 8:  # close
+                if opcode == 8:
                     break
                 if opcode not in (1, 2):
                     continue
@@ -291,46 +292,256 @@ def cmd_chat(cfg: dict):
                     msg = json.loads(frame)
                 except Exception:
                     continue
-
                 t = msg.get("type")
-                if t == "start":
-                    in_stream = True
-                    buf = ""
-                    print(f"\n  {LPURPLE}{ada_name}:{RESET} ", end="", flush=True)
-                elif t == "chunk":
-                    chunk = msg.get("content", "")
-                    print(chunk, end="", flush=True)
-                    buf += chunk
-                elif t == "done":
-                    in_stream = False
-                    print(f"\n", flush=True)
-                elif t == "error":
-                    print(f"\n  {MUTED}Error: {msg.get('content')}{RESET}\n", flush=True)
+                with lock:
+                    if t == "start":
+                        stream["active"] = True
+                        stream["buf"]    = ""
+                    elif t == "chunk":
+                        stream["buf"] += msg.get("content", "")
+                    elif t == "done":
+                        if stream["buf"]:
+                            msgs.append(("ada", stream["buf"]))
+                        stream.update({"active": False, "buf": ""})
+                    elif t == "error":
+                        msgs.append(("sys", "Error: " + msg.get("content", "?")))
+                        stream["active"] = False
+                dirty.set()
         except Exception:
-            pass
+            with lock:
+                msgs.append(("sys", "Connection closed."))
+            dirty.set()
 
-    recv_thread = threading.Thread(target=recv_loop, daemon=True)
-    recv_thread.start()
+    threading.Thread(target=recv_loop, daemon=True).start()
+
+    # ── TUI ───────────────────────────────────────────────────────────────────
+    def render_lines(cols):
+        """Flatten messages into word-wrapped display lines: [(kind, text)]."""
+        out    = []
+        max_w  = max(cols - 4, 20)
+
+        def wrap(text, indent):
+            lines, cur, avail = [], "", max_w - indent
+            for word in text.replace("\n", " \n ").split(" "):
+                if word == "\n":
+                    lines.append(cur); cur = ""; avail = max_w - indent
+                elif cur and len(cur) + 1 + len(word) > avail:
+                    lines.append(cur); cur = word; avail = max_w - indent
+                else:
+                    cur = (cur + " " + word).strip() if cur else word
+            if cur:
+                lines.append(cur)
+            return lines or [""]
+
+        with lock:
+            all_msgs = list(msgs)
+            if stream["active"] and stream["buf"]:
+                all_msgs.append(("ada", stream["buf"]))
+
+        for role, text in all_msgs:
+            if role == "sys":
+                out.append(("sys", "  " + text))
+            else:
+                label    = (ada_name if role == "ada" else "You") + ":"
+                indent   = len(label) + 1
+                wrapped  = wrap(text, indent)
+                out.append((role + "_first", "  " + label + " " + wrapped[0]))
+                for cont in wrapped[1:]:
+                    out.append((role + "_cont", "  " + " " * indent + cont))
+            out.append(("blank", ""))
+
+        return out
+
+    def run_tui(stdscr):
+        import curses as C
+        C.curs_set(1)
+        C.use_default_colors()
+        if C.has_colors():
+            C.init_pair(1, C.COLOR_GREEN,  -1)   # ada / green accent
+            C.init_pair(2, C.COLOR_WHITE,  -1)   # you
+            C.init_pair(3, 8,              -1)   # muted (bright black)
+            C.init_pair(4, C.COLOR_BLACK, C.COLOR_GREEN)  # status bar
+            C.init_pair(5, C.COLOR_MAGENTA, -1)  # purple accent
+
+        cGreen  = C.color_pair(1) | C.A_BOLD
+        cYou    = C.color_pair(2) | C.A_BOLD
+        cMuted  = C.color_pair(3)
+        cStatus = C.color_pair(4)
+        cNorm   = C.A_NORMAL
+
+        KIND_ATTR = {
+            "ada_first": cGreen, "ada_cont": cNorm,
+            "you_first": cYou,   "you_cont": cNorm,
+            "sys":       cMuted, "blank":    cNorm,
+        }
+
+        inp_buf = ""; cursor = 0; scroll = 0
+        stdscr.timeout(80)
+        stdscr.keypad(True)
+
+        while alive.is_set():
+            rows, cols = stdscr.getmaxyx()
+            msg_h = max(rows - 3, 1)
+
+            lines = render_lines(cols)
+            total = len(lines)
+            start = max(0, total - msg_h - scroll)
+
+            # message pane
+            for y, (kind, text) in enumerate(lines[start: start + msg_h]):
+                try:
+                    stdscr.move(y + 1, 0); stdscr.clrtoeol()
+                    stdscr.addstr(y + 1, 0, text[:cols - 1], KIND_ATTR.get(kind, cNorm))
+                except C.error:
+                    pass
+            for y in range(min(len(lines) - start, msg_h), msg_h):
+                try:
+                    stdscr.move(y + 1, 0); stdscr.clrtoeol()
+                except C.error:
+                    pass
+
+            # status bar
+            host_disp = instance.replace("https://", "").replace("http://", "")
+            status = f" ● AdaDo  {host_disp}"
+            if user_name:  status += f"  {user_name}"
+            if model_name: status += f"  {model_name}"
+            if scroll > 0: status += "  ↑ scrolled (↓ to return)"
+            try:
+                stdscr.addstr(0, 0, status[:cols - 1].ljust(cols - 1), cStatus)
+            except C.error:
+                pass
+
+            # separator
+            try:
+                stdscr.addstr(rows - 2, 0, "─" * (cols - 1), cMuted)
+            except C.error:
+                pass
+
+            # input bar
+            prompt   = " › "
+            inp_area = cols - len(prompt) - 1
+            pan      = max(0, cursor - inp_area + 1)
+            disp     = inp_buf[pan: pan + inp_area]
+            try:
+                stdscr.move(rows - 1, 0); stdscr.clrtoeol()
+                stdscr.addstr(rows - 1, 0, prompt, cGreen)
+                stdscr.addstr(rows - 1, len(prompt), disp)
+                stdscr.move(rows - 1, len(prompt) + cursor - pan)
+            except C.error:
+                pass
+
+            stdscr.refresh()
+            dirty.clear()
+
+            ch = stdscr.getch()
+            if ch == -1:
+                if stream["active"]: dirty.set()
+                continue
+
+            if ch == C.KEY_RESIZE:
+                stdscr.clear()
+
+            elif ch in (C.KEY_ENTER, 10, 13):
+                msg = inp_buf.strip(); inp_buf = ""; cursor = 0
+                if msg.lower() in ("exit", "quit", "/exit", "/quit"):
+                    alive.clear(); break
+                if msg:
+                    with lock: msgs.append(("you", msg))
+                    scroll = 0; dirty.set()
+                    try:
+                        ws_send_text(sock, json.dumps({"content": msg}))
+                    except Exception:
+                        with lock: msgs.append(("sys", "✗ Send failed."))
+                        dirty.set()
+
+            elif ch in (C.KEY_BACKSPACE, 127, 8):
+                if cursor > 0:
+                    inp_buf = inp_buf[:cursor - 1] + inp_buf[cursor:]
+                    cursor -= 1
+
+            elif ch == C.KEY_DC:
+                inp_buf = inp_buf[:cursor] + inp_buf[cursor + 1:]
+
+            elif ch == C.KEY_LEFT:
+                if cursor > 0: cursor -= 1
+
+            elif ch == C.KEY_RIGHT:
+                if cursor < len(inp_buf): cursor += 1
+
+            elif ch in (C.KEY_HOME, 1):   # Home / Ctrl+A
+                cursor = 0
+
+            elif ch in (C.KEY_END, 5):    # End / Ctrl+E
+                cursor = len(inp_buf)
+
+            elif ch == C.KEY_UP:
+                scroll = min(scroll + 3, max(0, total - msg_h))
+
+            elif ch == C.KEY_DOWN:
+                scroll = max(0, scroll - 3)
+
+            elif ch == C.KEY_PPAGE:
+                scroll = min(scroll + msg_h, max(0, total - msg_h))
+
+            elif ch == C.KEY_NPAGE:
+                scroll = max(0, scroll - msg_h)
+
+            elif 32 <= ch <= 126:
+                inp_buf = inp_buf[:cursor] + chr(ch) + inp_buf[cursor:]
+                cursor += 1
+
+            dirty.set()
+
+    # ── dumb-terminal fallback (Windows / no curses) ──────────────────────────
+    def run_dumb():
+        print(f"\033[2K\r  {GREEN}● {ada_name}{RESET}  {MUTED}{instance}{RESET}\n")
+        print(f"  {MUTED}Type a message. 'exit' to quit.{RESET}\n")
+
+        def _recv():
+            try:
+                while alive.is_set():
+                    opcode, frame = ws_recv_frame(sock)
+                    if opcode == 8: break
+                    if opcode not in (1, 2): continue
+                    try: msg = json.loads(frame)
+                    except: continue
+                    t = msg.get("type")
+                    if t == "start":
+                        print(f"\n  {LGREEN}{ada_name}:{RESET} ", end="", flush=True)
+                    elif t == "chunk":
+                        print(msg.get("content", ""), end="", flush=True)
+                    elif t == "done":
+                        print("\n", flush=True)
+                    elif t == "error":
+                        print(f"\n  {MUTED}Error: {msg.get('content')}{RESET}\n", flush=True)
+            except Exception:
+                pass
+
+        threading.Thread(target=_recv, daemon=True).start()
+        try:
+            while alive.is_set():
+                try:
+                    text = input(f"  {BOLD}You:{RESET} ").strip()
+                except EOFError:
+                    break
+                if not text: continue
+                if text.lower() in ("exit", "quit"): break
+                ws_send_text(sock, json.dumps({"content": text}))
+        except KeyboardInterrupt:
+            pass
 
     try:
-        while True:
-            try:
-                user_input = input(f"  {BOLD}You:{RESET} ").strip()
-            except EOFError:
-                break
-            if not user_input:
-                continue
-            if user_input.lower() in ("exit", "quit", "bye"):
-                break
-            ws_send_text(sock, json.dumps({"content": user_input}))
-    except KeyboardInterrupt:
+        import curses as _c
+        _c.wrapper(run_tui)
+    except Exception:
+        run_dumb()
+
+    alive.clear()
+    try:
+        sock.close()
+    except Exception:
         pass
-    finally:
-        try:
-            sock.close()
-        except Exception:
-            pass
-        print(f"\n  {MUTED}Goodbye.{RESET}\n")
+    print(f"\n  {MUTED}Goodbye.{RESET}\n")
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 

@@ -17,12 +17,13 @@ services:
     restart: unless-stopped
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-haiku-4-5-20251001}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-6}
       - USE_ANTHROPIC=${USE_ANTHROPIC:-true}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
       - DB_PATH=/data/adado.db
       - APPS_DIR=/apps
       - AGENTS_DIR=/agents
+      - CORE_DIR=/agents/core
       - INSTANCE_NAME=${INSTANCE_NAME:-Ada}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
     extra_hosts:

@@ -23,60 +23,77 @@ JWT_SECRET        = os.getenv("JWT_SECRET", secrets.token_hex(32))
 DB_PATH           = os.getenv("DB_PATH", "/data/adado.db")
 APPS_DIR          = os.getenv("APPS_DIR", "/apps")
 AGENTS_DIR        = os.getenv("AGENTS_DIR", "/agents")
+CORE_DIR          = os.getenv("CORE_DIR",   "/agents/core")
 INSTANCE_NAME     = os.getenv("INSTANCE_NAME", "Ada")
 
 USE_ANTHROPIC = bool(ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"))
 
 TRIAL_DAYS = 7
 
-# ─── Persona builder ──────────────────────────────────────────────────────────
+# ─── Locked template loader ───────────────────────────────────────────────────
 
-DEFAULT_SOUL = f"""You are Ada, an AI assistant built on AdaDo.
-You are direct, capable, and proactive. You get things done.
-When asked to do something, do it — don't ask for permission or explain what you're about to do.
-Verify from live sources, not from memory. Be concise. Have opinions and hold them.
-You help the user manage their life through their apps: projects, finance, passwords, inbox, and more.
-Talk to them like a capable colleague, not a customer service bot."""
+def _load_core_md(filename: str) -> str:
+    """Load a locked template MD from the core directory."""
+    try:
+        return Path(CORE_DIR, filename).read_text().strip()
+    except Exception:
+        return ""
+
+_SOUL_TEMPLATE:   str = ""
+_AGENTS_TEMPLATE: str = ""
+
+def _get_soul_template() -> str:
+    global _SOUL_TEMPLATE
+    if not _SOUL_TEMPLATE:
+        _SOUL_TEMPLATE = _load_core_md("SOUL.md")
+    return _SOUL_TEMPLATE
+
+def _get_agents_template() -> str:
+    global _AGENTS_TEMPLATE
+    if not _AGENTS_TEMPLATE:
+        _AGENTS_TEMPLATE = _load_core_md("AGENTS.md")
+    return _AGENTS_TEMPLATE
+
+DEFAULT_SOUL = (
+    "You are Ada, an AI assistant built on AdaDo. "
+    "You are direct, capable, and proactive. You get things done. "
+    "You help the user manage their life through their connected apps. "
+    "Talk like a capable colleague, not a customer service bot."
+)
 
 def build_soul(name: str, onboarding: dict) -> str:
+    """Build the system prompt for a user's Ada agent from the locked template."""
+    base = _get_soul_template() or DEFAULT_SOUL
+
+    # User-specific context appended after the locked base — never replaces it
+    parts = [base, f"\n\n## Your User\nYour user's name is {name}."]
+
     role = onboarding.get("role", "")
-    uses = onboarding.get("use_cases", [])
-    experience = onboarding.get("experience", "")
-    goals = onboarding.get("goals", "")
-
-    role_line = f"Your user's name is {name}"
     if role:
-        role_line += f", a {role}"
-    role_line += "."
+        parts.append(f"They are a {role}.")
 
-    use_line = ""
+    uses = onboarding.get("use_cases", [])
     if uses:
-        use_line = f"They primarily use Ada for: {', '.join(uses)}."
+        parts.append(f"They primarily use Ada for: {', '.join(uses)}.")
 
-    goal_line = ""
+    goals = onboarding.get("goals", "")
     if goals:
-        goal_line = f"Context they shared: {goals}"
+        parts.append(f"Context they shared: {goals}")
 
     exp_map = {
-        "beginner": "They're new to AI — explain things simply, avoid jargon.",
+        "beginner":     "They're new to AI — explain things simply, avoid jargon.",
         "intermediate": "They're comfortable with AI tools — be efficient.",
-        "advanced": "They're an experienced AI user — be terse and technical when appropriate.",
+        "advanced":     "They're an experienced AI user — be terse and technical when appropriate.",
     }
-    exp_line = exp_map.get(experience, "")
+    exp = exp_map.get(onboarding.get("experience", ""), "")
+    if exp:
+        parts.append(exp)
 
-    parts = [
-        "You are Ada, an AI assistant built on AdaDo.",
-        "You are direct, capable, and proactive. You get things done.",
-        role_line,
-        use_line,
-        goal_line,
-        exp_line,
-        "When asked to do something, do it — don't ask for permission or explain first.",
-        "Verify from live sources, not from memory. Be concise. Have opinions and hold them.",
-        "You help them manage their life through their apps: projects, finance, passwords, inbox, and more.",
-        "Talk like a capable colleague, not a customer service bot.",
-    ]
-    return " ".join(p for p in parts if p)
+    agents_ctx = _get_agents_template()
+    if agents_ctx:
+        parts.append(f"\n\n## App & Agent System\n{agents_ctx[:800]}")
+
+    return "\n".join(parts)
 
 # ─── Agent coordinator ────────────────────────────────────────────────────────
 
@@ -204,6 +221,7 @@ def init_db():
         ("trial_ends_at",       "INTEGER"),
         ("onboarding_complete", "INTEGER DEFAULT 0"),
         ("onboarding_data",     "TEXT DEFAULT '{}'"),
+        ("preferred_model",     "TEXT"),
     ]:
         try:
             db.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
@@ -337,13 +355,30 @@ def load_apps() -> list[dict]:
 
 # ─── AI streaming ─────────────────────────────────────────────────────────────
 
-async def stream_anthropic(messages: list, soul: str, websocket: WebSocket) -> tuple[str, int, int]:
+# Models users are allowed to select, keyed by tier
+ALLOWED_MODELS = {
+    "cloud":      ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    "cli":        ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+    "vps":        ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+    "enterprise": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+}
+
+def resolve_model(user_row) -> str:
+    """Return the model to use for this user — preferred if allowed, else default."""
+    preferred = user_row["preferred_model"] if user_row and user_row["preferred_model"] else None
+    tier      = user_row["tier"] if user_row else "cloud"
+    allowed   = ALLOWED_MODELS.get(tier, ALLOWED_MODELS["cloud"])
+    if preferred and preferred in allowed:
+        return preferred
+    return CLAUDE_MODEL
+
+async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, model: str = None) -> tuple[str, int, int]:
     import anthropic
     client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
     full = ""
     input_tok = output_tok = 0
     async with client.messages.stream(
-        model=CLAUDE_MODEL,
+        model=model or CLAUDE_MODEL,
         max_tokens=4096,
         system=soul,
         messages=messages,
@@ -579,20 +614,22 @@ async def chat_ws(websocket: WebSocket):
     soul = DEFAULT_SOUL
     onboarding_complete = True
     history = []
+    active_model = CLAUDE_MODEL
+    user_row_cache = None
 
     db = get_db()
     session_id = None
     if user_data:
-        user_row = db.execute("SELECT * FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
-        if user_row:
-            user_name = user_row["name"]
-            onboarding_complete = bool(user_row["onboarding_complete"])
+        user_row_cache = db.execute("SELECT * FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+        if user_row_cache:
+            user_name = user_row_cache["name"]
+            onboarding_complete = bool(user_row_cache["onboarding_complete"])
+            active_model = resolve_model(user_row_cache)
             if onboarding_complete:
-                onboarding = json.loads(user_row["onboarding_data"] or "{}")
+                onboarding = json.loads(user_row_cache["onboarding_data"] or "{}")
                 soul = build_soul(user_name, onboarding)
             else:
                 onboarding = {}
-            # Load most recent session
             session = db.execute(
                 "SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
                 (user_data["sub"],)
@@ -603,8 +640,10 @@ async def chat_ws(websocket: WebSocket):
     db.close()
 
     await websocket.send_json({
-        "type": "ready",
-        "name": user_name,
+        "type":  "ready",
+        "name":  user_name,
+        "model": active_model,
+        "user":  user_name,
         "onboarding_complete": onboarding_complete,
     })
 
@@ -653,7 +692,7 @@ async def chat_ws(websocket: WebSocket):
             try:
                 context = _trim_context(history, active_soul)
                 if USE_ANTHROPIC:
-                    full_response, input_tok, output_tok = await stream_anthropic(context, active_soul, websocket)
+                    full_response, input_tok, output_tok = await stream_anthropic(context, active_soul, websocket, model=active_model)
                 else:
                     full_response, input_tok, output_tok = await stream_ollama(context, active_soul, websocket)
             except Exception as e:
@@ -761,6 +800,44 @@ async def set_burn_limits(req: BurnLimitRequest, request: Request):
     db.commit()
     db.close()
     return {"ok": True, "daily_limit_usd": req.daily_limit_usd, "monthly_limit_usd": req.monthly_limit_usd}
+
+@app.get("/api/models")
+async def list_models(request: Request):
+    """Return models available to this user."""
+    user_data = get_auth_user(request)
+    tier = "cloud"
+    if user_data:
+        db = get_db()
+        row = db.execute("SELECT tier, preferred_model FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+        db.close()
+        if row:
+            tier = row["tier"] or "cloud"
+            current = row["preferred_model"] or CLAUDE_MODEL
+        else:
+            current = CLAUDE_MODEL
+    else:
+        current = CLAUDE_MODEL
+    return {"models": ALLOWED_MODELS.get(tier, ALLOWED_MODELS["cloud"]), "current": current, "default": CLAUDE_MODEL}
+
+@app.put("/api/me/model")
+async def set_preferred_model(request: Request):
+    """Set the user's preferred model."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    model = body.get("model", "").strip()
+    db = get_db()
+    row = db.execute("SELECT tier FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+    tier = row["tier"] if row else "cloud"
+    allowed = ALLOWED_MODELS.get(tier, ALLOWED_MODELS["cloud"])
+    if model not in allowed:
+        db.close()
+        raise HTTPException(400, f"Model not available on your tier. Allowed: {allowed}")
+    db.execute("UPDATE users SET preferred_model = ? WHERE id = ?", (model, user_data["sub"]))
+    db.commit()
+    db.close()
+    return {"ok": True, "model": model}
 
 # ─── Static / UI ──────────────────────────────────────────────────────────────
 
