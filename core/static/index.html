@@ -19,6 +19,7 @@
     --ada-bubble: #1e1b2e;
     --radius: 14px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --max-chat: 720px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,21 +39,24 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1.25rem;
+    padding: 0.6rem 1.25rem;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    z-index: 10;
   }
   .logo {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     font-weight: 800;
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     letter-spacing: -0.02em;
     background: linear-gradient(135deg, #a78bfa, var(--accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    cursor: pointer;
+    user-select: none;
   }
   .topbar-right { display: flex; gap: 0.5rem; align-items: center; }
   .btn-sm {
@@ -64,89 +68,59 @@
     font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.15s;
+    font-family: var(--font);
   }
   .btn-sm:hover { border-color: var(--accent); color: var(--text); }
   .btn-sm.primary { background: var(--accent); border-color: var(--accent); color: white; }
   .btn-sm.primary:hover { background: var(--accent-dim); }
 
-  /* ── Main layout ── */
-  .layout {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* ── Sidebar ── */
-  .sidebar {
-    width: 220px;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    overflow: hidden;
-  }
-  .sidebar-section {
-    padding: 0.75rem 1rem 0.5rem;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-  }
-  .app-list { flex: 1; overflow-y: auto; padding-bottom: 1rem; }
-  .app-item {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.55rem 1rem;
-    cursor: pointer;
-    transition: background 0.1s;
-    font-size: 0.88rem;
-    border-radius: 0;
-    color: var(--muted);
-  }
-  .app-item:hover, .app-item.active { background: var(--surface2); color: var(--text); }
-  .app-item .app-emoji { font-size: 1rem; width: 1.2rem; text-align: center; }
-  .sidebar-logo {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.85rem 1rem 0.6rem;
-    font-weight: 700;
-    font-size: 0.88rem;
-    letter-spacing: -0.01em;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 0.5rem;
-  }
-  .sidebar-chat-btn {
-    margin: 0.75rem;
-    padding: 0.6rem;
-    background: var(--accent);
+  /* Apps grid button (9-dots) */
+  .apps-btn {
+    background: transparent;
     border: none;
-    border-radius: 10px;
-    color: white;
-    font-weight: 600;
-    font-size: 0.88rem;
+    color: var(--muted);
     cursor: pointer;
-    width: calc(100% - 1.5rem);
-    text-align: center;
+    padding: 0.35rem;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 0.4rem;
   }
-  .sidebar-chat-btn:hover { background: var(--accent-dim); }
+  .apps-btn:hover { color: var(--text); background: var(--surface2); }
 
-  /* ── Chat area ── */
+  /* Active app pill in topbar */
+  .active-app-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(110,91,240,0.15);
+    border: 1px solid rgba(110,91,240,0.4);
+    border-radius: 20px;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.78rem;
+    color: #a78bfa;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .active-app-pill:hover { background: rgba(110,91,240,0.25); }
+  .active-app-pill .pill-x { opacity: 0.6; margin-left: 0.1rem; }
+
+  /* ── Main layout: full width chat ── */
   .chat-area {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0;
+    min-height: 0;
+    align-items: center;
   }
 
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 1.5rem;
+    width: 100%;
+    max-width: var(--max-chat);
+    padding: 1.5rem 1.25rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -155,36 +129,36 @@
   .msg {
     display: flex;
     gap: 0.75rem;
-    max-width: 72%;
+    max-width: 100%;
     animation: fadeIn 0.2s ease;
   }
-  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
-  .msg.ada { align-self: flex-start; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; max-width: 85%; }
+  .msg.ada  { align-self: flex-start; }
 
   .avatar {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 0.9rem;
     flex-shrink: 0;
     background: var(--surface2);
     border: 1px solid var(--border);
+    margin-top: 2px;
   }
   .msg.ada .avatar { background: var(--accent); border-color: var(--accent); }
 
   .bubble {
-    padding: 0.75rem 1rem;
+    padding: 0.7rem 1rem;
     border-radius: var(--radius);
-    line-height: 1.6;
-    font-size: 0.92rem;
-    white-space: pre-wrap;
+    line-height: 1.65;
+    font-size: 0.93rem;
     word-break: break-word;
   }
   .msg.user .bubble { background: var(--user-bubble); border-radius: var(--radius) 4px var(--radius) var(--radius); }
-  .msg.ada .bubble  { background: var(--ada-bubble); border: 1px solid var(--border); border-radius: 4px var(--radius) var(--radius) var(--radius); }
+  .msg.ada  .bubble { background: var(--ada-bubble); border: 1px solid var(--border); border-radius: 4px var(--radius) var(--radius) var(--radius); }
 
   .typing-dot {
     display: inline-block;
@@ -196,33 +170,72 @@
   .typing-dot:nth-child(2) { animation-delay: 0.2s; }
   .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-  /* ── Input ── */
-  .input-row {
-    padding: 1rem 1.5rem 1.25rem;
-    background: var(--bg);
-    border-top: 1px solid var(--border);
-    display: flex;
-    gap: 0.75rem;
-    align-items: flex-end;
-  }
-  .input-wrap { flex: 1; position: relative; }
-  textarea {
+  /* ── Input area ── */
+  .input-area {
     width: 100%;
+    max-width: var(--max-chat);
+    padding: 0.75rem 1.25rem 1rem;
+    flex-shrink: 0;
+  }
+
+  /* Connected apps row (above input, only when apps enabled) */
+  .app-tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+  }
+  .app-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .app-tab:hover { border-color: var(--accent); color: var(--text); }
+  .app-tab.active {
+    background: rgba(110,91,240,0.2);
+    border-color: var(--accent);
+    color: #c4b5fd;
+  }
+  .app-tab .tab-x {
+    font-size: 0.65rem;
+    opacity: 0.5;
+    margin-left: 0.15rem;
+  }
+  .app-tab .tab-x:hover { opacity: 1; }
+
+  .input-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-end;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    color: var(--text);
-    font-family: var(--font);
-    font-size: 0.92rem;
-    padding: 0.8rem 1rem;
-    resize: none;
-    min-height: 44px;
-    max-height: 160px;
-    line-height: 1.5;
-    outline: none;
+    border-radius: 16px;
+    padding: 0.5rem 0.6rem 0.5rem 1rem;
     transition: border-color 0.15s;
   }
-  textarea:focus { border-color: var(--accent); }
+  .input-row:focus-within { border-color: var(--accent); }
+  textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.93rem;
+    resize: none;
+    min-height: 24px;
+    max-height: 140px;
+    line-height: 1.5;
+    outline: none;
+  }
   textarea::placeholder { color: var(--muted); }
   .send-btn {
     background: var(--accent);
@@ -230,16 +243,126 @@
     border-radius: 10px;
     color: white;
     cursor: pointer;
-    padding: 0.65rem 1rem;
-    font-size: 1.1rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
     transition: background 0.15s;
     flex-shrink: 0;
     align-self: flex-end;
+    line-height: 1;
   }
   .send-btn:hover:not(:disabled) { background: var(--accent-dim); }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mic-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    font-size: 1rem;
+    line-height: 1;
+    align-self: flex-end;
+    transition: color 0.15s;
+  }
+  .mic-btn:hover { color: var(--text); }
+  .input-hint {
+    text-align: center;
+    font-size: 0.71rem;
+    color: var(--muted);
+    padding: 0.4rem 0 0;
+  }
 
-  /* ── Auth modal ── */
+  /* ── Welcome / empty state ── */
+  .welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 2rem 1rem;
+    text-align: center;
+    width: 100%;
+  }
+  .welcome-icon { margin-bottom: 0.25rem; }
+  .welcome h2 { font-size: 1.55rem; font-weight: 800; }
+  .welcome p { color: var(--muted); max-width: 380px; line-height: 1.6; font-size: 0.92rem; }
+
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: center;
+    margin-top: 0.25rem;
+    max-width: 520px;
+  }
+  .suggestion {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.83rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suggestion:hover { border-color: var(--accent); color: var(--text); }
+
+  /* App tiles on welcome */
+  .welcome-apps-label {
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 0.75rem;
+    align-self: center;
+  }
+  .app-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.45rem;
+    max-width: 520px;
+    width: 100%;
+  }
+  @media (max-width: 480px) { .app-grid { grid-template-columns: repeat(3, 1fr); } }
+  .app-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    text-align: center;
+  }
+  .app-card:hover { border-color: var(--accent); background: rgba(110,91,240,0.08); }
+  .app-card.added { border-color: rgba(110,91,240,0.5); }
+  .app-card .card-icon { font-size: 1.3rem; }
+  .app-card .card-name { font-size: 0.73rem; color: var(--muted); }
+  .app-card.added .card-name { color: var(--text); }
+
+  /* Add more apps button */
+  .add-apps-btn {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--muted);
+    font-size: 0.73rem;
+    font-family: var(--font);
+  }
+  .add-apps-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── App Library modal ── */
   .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.7);
@@ -251,24 +374,60 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 20px;
+    padding: 1.5rem;
+    width: 560px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-shrink:0; }
+  .modal-header h2 { font-size: 1.2rem; font-weight: 800; }
+  .modal-body { overflow-y: auto; flex: 1; }
+  .lib-tiles {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.45rem; padding-bottom: 0.5rem;
+  }
+  .lib-tile {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0.75rem 0.5rem; cursor: pointer;
+    transition: all 0.15s; display: flex; flex-direction: column;
+    align-items: center; gap: 0.3rem; text-align: center;
+  }
+  .lib-tile:hover { border-color: var(--accent); background: rgba(110,91,240,0.08); }
+  .lib-tile.enabled { border-color: var(--accent); background: rgba(110,91,240,0.12); cursor: default; }
+  .lib-tile .lt-icon { font-size: 1.4rem; }
+  .lib-tile .lt-name { font-size: 0.78rem; color: var(--muted); }
+  .lib-tile.enabled .lt-name { color: var(--text); }
+  .lib-tile .lt-action { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+  .lib-tile.coming-soon { opacity: 0.5; cursor: default; }
+  .lib-tile.coming-soon:hover { border-color: var(--border); background: var(--surface2); }
+  .lib-tile.coming-soon .lt-action { color: var(--muted); }
+
+  /* ── Auth modal ── */
+  .auth-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
     padding: 2rem;
     width: 360px;
-    max-width: 90vw;
+    max-width: 92vw;
   }
-  .modal h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.3rem; }
-  .modal p { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem; }
-  .field { margin-bottom: 1rem; }
-  .field label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; font-weight: 500; }
+  .auth-modal h2 { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.3rem; }
+  .auth-modal p { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.25rem; }
+  .field { margin-bottom: 0.85rem; }
+  .field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.35rem; font-weight: 500; }
   .field input {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     padding: 0.6rem 0.8rem;
     outline: none;
     transition: border-color 0.15s;
+    font-family: var(--font);
   }
   .field input:focus { border-color: var(--accent); }
   .modal-btn {
@@ -278,136 +437,24 @@
     border-radius: 10px;
     color: white;
     font-weight: 700;
-    font-size: 0.95rem;
-    padding: 0.75rem;
+    font-size: 0.93rem;
+    padding: 0.7rem;
     cursor: pointer;
     margin-top: 0.5rem;
     transition: background 0.15s;
+    font-family: var(--font);
   }
   .modal-btn:hover { background: var(--accent-dim); }
   .modal-switch {
     text-align: center;
-    margin-top: 1rem;
-    font-size: 0.84rem;
+    margin-top: 0.9rem;
+    font-size: 0.83rem;
     color: var(--muted);
   }
   .modal-switch a { color: var(--accent); cursor: pointer; text-decoration: none; }
-  .modal-err { color: #f87171; font-size: 0.82rem; margin-top: 0.5rem; text-align: center; }
+  .modal-err { color: #f87171; font-size: 0.81rem; margin-top: 0.4rem; text-align: center; }
 
-  /* ── Welcome state ── */
-  .welcome {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 2rem;
-    text-align: center;
-  }
-  .welcome-icon { display:flex; justify-content:center; margin-bottom:0.5rem; }
-  .welcome h2 { font-size: 1.6rem; font-weight: 800; }
-  .welcome p { color: var(--muted); max-width: 380px; line-height: 1.6; }
-  .suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: center;
-    margin-top: 0.5rem;
-    max-width: 480px;
-  }
-  .suggestion {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 0.45rem 0.9rem;
-    font-size: 0.84rem;
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .suggestion:hover { border-color: var(--accent); color: var(--text); }
-
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  @keyframes blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
-
-  .messages::-webkit-scrollbar { width: 4px; }
-  .messages::-webkit-scrollbar-track { background: transparent; }
-  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  /* ── Markdown in Ada bubbles ── */
-  .bubble h1,.bubble h2,.bubble h3 { font-weight:700; margin:0.75rem 0 0.25rem; }
-  .bubble h1 { font-size:1.1rem; }
-  .bubble h2 { font-size:1rem; }
-  .bubble h3 { font-size:0.95rem; }
-  .bubble p { margin:0.4rem 0; }
-  .bubble ul,.bubble ol { padding-left:1.4rem; margin:0.4rem 0; }
-  .bubble li { margin:0.2rem 0; }
-  .bubble code { background:rgba(255,255,255,0.07); border-radius:4px; padding:0.1em 0.35em; font-family:monospace; font-size:0.87em; }
-  .bubble pre { background:rgba(255,255,255,0.05); border-radius:8px; padding:0.75rem 1rem; overflow-x:auto; margin:0.5rem 0; }
-  .bubble pre code { background:none; padding:0; }
-  .bubble strong { font-weight:700; }
-  .bubble em { font-style:italic; }
-  .bubble hr { border:none; border-top:1px solid var(--border); margin:0.75rem 0; }
-  .bubble blockquote { border-left:3px solid var(--accent); padding-left:0.75rem; color:var(--muted); margin:0.4rem 0; }
-  .bubble a { color:var(--accent); text-decoration:underline; }
-
-  /* ── Trial / usage badge ── */
-  .trial-badge {
-    background: rgba(110,91,240,0.15);
-    border: 1px solid rgba(110,91,240,0.4);
-    border-radius: 6px;
-    padding: 0.25rem 0.6rem;
-    font-size: 0.75rem;
-    color: #a78bfa;
-    font-weight: 600;
-  }
-  .trial-badge.warn { background:rgba(239,68,68,0.12); border-color:rgba(239,68,68,0.4); color:#fca5a5; }
-
-  /* ── Usage panel ── */
-  .usage-panel {
-    position: fixed; top: 55px; right: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 1rem 1.25rem;
-    width: 280px;
-    z-index: 50;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    display: none;
-    animation: fadeIn 0.15s ease;
-  }
-  .usage-panel.open { display: block; }
-  .usage-row { display:flex; justify-content:space-between; font-size:0.82rem; padding:0.3rem 0; color:var(--muted); }
-  .usage-row strong { color: var(--text); }
-  .usage-title { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:0.5rem; }
-
-  /* ── App tiles in welcome ── */
-  .app-tiles {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    margin-top: 1rem;
-    max-width: 480px;
-    width: 100%;
-  }
-  .app-tile {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 0.65rem 0.75rem;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.82rem;
-    color: var(--muted);
-  }
-  .app-tile:hover { border-color:var(--accent); color:var(--text); background:rgba(110,91,240,0.08); }
-  .app-tile .tile-icon { font-size:1rem; flex-shrink:0; }
-
-  /* ── Onboarding wizard ── */
+  /* ── Onboarding ── */
   .onboard-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.85);
@@ -419,41 +466,40 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 24px;
-    padding: 2.5rem 2rem;
-    width: 460px;
+    padding: 2.25rem 2rem;
+    width: 450px;
     max-width: 92vw;
-    position: relative;
     box-shadow: 0 40px 80px rgba(0,0,0,0.5);
   }
-  .onboard-logo { display:flex; align-items:center; gap:0.6rem; margin-bottom:1.5rem; }
-  .onboard-logo span { font-weight:800; font-size:1.1rem; background:linear-gradient(135deg,#a78bfa,var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .onboard-logo { display:flex; align-items:center; gap:0.6rem; margin-bottom:1.25rem; }
+  .onboard-logo span { font-weight:800; font-size:1.05rem; background:linear-gradient(135deg,#a78bfa,var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
   .onboard-step { display: none; }
-  .onboard-step.active { display: block; animation: fadeIn 0.25s ease; }
-  .onboard-step h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.4rem; }
-  .onboard-step .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.75rem; line-height: 1.5; }
+  .onboard-step.active { display: block; animation: fadeIn 0.2s ease; }
+  .onboard-step h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.35rem; }
+  .onboard-step .sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.5rem; line-height: 1.5; }
   .onboard-input {
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 10px;
     color: var(--text);
-    font-size: 0.95rem;
-    padding: 0.75rem 1rem;
+    font-size: 0.92rem;
+    padding: 0.7rem 1rem;
     outline: none;
     transition: border-color 0.15s;
     font-family: var(--font);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
   }
   .onboard-input:focus { border-color: var(--accent); }
   .onboard-input::placeholder { color: var(--muted); }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1.25rem; }
   .chip {
-    padding: 0.45rem 0.9rem;
+    padding: 0.4rem 0.85rem;
     border-radius: 999px;
     border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--muted);
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     cursor: pointer;
     transition: all 0.15s;
     user-select: none;
@@ -464,81 +510,89 @@
     width: 100%;
     background: var(--accent);
     border: none; border-radius: 12px;
-    color: white; font-size: 1rem; font-weight: 700;
-    padding: 0.85rem;
+    color: white; font-size: 0.95rem; font-weight: 700;
+    padding: 0.8rem;
     cursor: pointer;
     transition: background 0.15s;
+    font-family: var(--font);
   }
   .onboard-btn:hover { background: var(--accent-dim); }
   .onboard-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .onboard-skip { text-align:center; margin-top:0.75rem; font-size:0.82rem; color:var(--muted); cursor:pointer; }
+  .onboard-skip { text-align:center; margin-top:0.65rem; font-size:0.81rem; color:var(--muted); cursor:pointer; }
   .onboard-skip:hover { color: var(--text); }
-  .onboard-prog { display:flex; gap:0.4rem; justify-content:center; margin-bottom:1.5rem; }
+  .onboard-prog { display:flex; gap:0.4rem; justify-content:center; margin-bottom:1.25rem; }
   .onboard-dot { width:6px; height:6px; border-radius:50%; background:var(--border); transition:background 0.2s; }
   .onboard-dot.active { background:var(--accent); }
-  .done-icon { text-align:center; font-size:3rem; margin-bottom:1rem; }
-  .done-h { font-size:1.6rem; font-weight:800; text-align:center; margin-bottom:0.5rem; }
-  .done-sub { color:var(--muted); text-align:center; font-size:0.9rem; line-height:1.6; margin-bottom:1.75rem; }
+  .done-icon { text-align:center; font-size:2.75rem; margin-bottom:0.75rem; }
+  .done-h { font-size:1.5rem; font-weight:800; text-align:center; margin-bottom:0.4rem; }
+  .done-sub { color:var(--muted); text-align:center; font-size:0.88rem; line-height:1.6; margin-bottom:1.5rem; }
   select.onboard-input { cursor: pointer; }
 
-  /* ── Chat items (sidebar thread switcher) ── */
-  .chat-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px; border-radius: 8px; cursor: pointer;
-    font-size: 0.875rem; color: var(--muted);
-    transition: background 0.15s;
-    margin: 0 6px;
-  }
-  .chat-item:hover { background: var(--surface2); color: var(--text); }
-  .chat-item.active { background: rgba(110,91,240,0.15); color: var(--text); }
-  .chat-item .ci-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
-  .chat-item .ci-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chat-item .ci-badge { font-size: 0.7rem; background: var(--accent); color: white; border-radius: 10px; padding: 1px 6px; display: none; }
-  .chat-item.active .ci-badge { display: inline; }
-  .sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 8px 12px; }
-  .sidebar-section {
-    font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--muted); padding: 12px 12px 4px; font-weight: 600;
-  }
-  .app-chat-list { flex: 1; overflow-y: auto; padding-bottom: 0.5rem; }
-  .sidebar-footer { padding: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
-  .sidebar-add-btn {
-    width: 100%; padding: 8px 12px;
-    background: transparent; border: 1px dashed var(--border);
-    border-radius: 8px; color: var(--muted); font-size: 0.84rem;
-    cursor: pointer; transition: all 0.15s; text-align: center;
-    font-family: var(--font);
-  }
-  .sidebar-add-btn:hover { border-color: var(--accent); color: var(--text); }
+  /* ── Markdown ── */
+  .bubble h1,.bubble h2,.bubble h3 { font-weight:700; margin:0.7rem 0 0.2rem; }
+  .bubble h1 { font-size:1.05rem; }
+  .bubble h2 { font-size:0.97rem; }
+  .bubble h3 { font-size:0.93rem; }
+  .bubble p { margin:0.35rem 0; }
+  .bubble ul,.bubble ol { padding-left:1.35rem; margin:0.35rem 0; }
+  .bubble li { margin:0.15rem 0; }
+  .bubble code { background:rgba(255,255,255,0.07); border-radius:4px; padding:0.1em 0.35em; font-family:monospace; font-size:0.86em; }
+  .bubble pre { background:rgba(255,255,255,0.05); border-radius:8px; padding:0.7rem 0.9rem; overflow-x:auto; margin:0.45rem 0; }
+  .bubble pre code { background:none; padding:0; }
+  .bubble strong { font-weight:700; }
+  .bubble em { font-style:italic; }
+  .bubble hr { border:none; border-top:1px solid var(--border); margin:0.6rem 0; }
+  .bubble blockquote { border-left:3px solid var(--accent); padding-left:0.7rem; color:var(--muted); margin:0.35rem 0; }
+  .bubble a { color:var(--accent); text-decoration:underline; }
 
-  /* ── App Library modal tiles ── */
-  .lib-tiles {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 0.5rem; margin-top: 0.75rem; max-height: 60vh; overflow-y: auto;
+  /* ── Usage panel ── */
+  .usage-panel {
+    position: fixed; top: 52px; right: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
+    width: 270px;
+    z-index: 50;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: none;
+    animation: fadeIn 0.15s ease;
   }
-  .lib-tile {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 12px; padding: 0.75rem 0.5rem; cursor: pointer;
-    transition: all 0.15s; display: flex; flex-direction: column;
-    align-items: center; gap: 0.35rem; text-align: center;
+  .usage-panel.open { display: block; }
+  .usage-row { display:flex; justify-content:space-between; font-size:0.81rem; padding:0.28rem 0; color:var(--muted); }
+  .usage-row strong { color: var(--text); }
+  .usage-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:0.45rem; }
+
+  /* ── Trial badge ── */
+  .trial-badge {
+    background: rgba(110,91,240,0.15);
+    border: 1px solid rgba(110,91,240,0.4);
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    color: #a78bfa;
+    font-weight: 600;
   }
-  .lib-tile:hover { border-color: var(--accent); background: rgba(110,91,240,0.08); }
-  .lib-tile.enabled { border-color: var(--accent); background: rgba(110,91,240,0.12); cursor: default; }
-  .lib-tile .lt-icon { font-size: 1.5rem; }
-  .lib-tile .lt-name { font-size: 0.79rem; color: var(--muted); }
-  .lib-tile.enabled .lt-name { color: var(--text); }
-  .lib-tile .lt-action { font-size: 0.71rem; color: var(--accent); font-weight: 600; margin-top: 0.1rem; }
-  .lib-tile.coming-soon { opacity: 0.55; cursor: default; }
-  .lib-tile.coming-soon:hover { border-color: var(--border); background: var(--surface2); }
-  .lib-tile.coming-soon .lt-action { color: var(--muted); }
+  .trial-badge.warn { background:rgba(239,68,68,0.12); border-color:rgba(239,68,68,0.4); color:#fca5a5; }
+
+  /* ── Scrollbar ── */
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .modal-body::-webkit-scrollbar { width: 4px; }
+  .modal-body::-webkit-scrollbar-track { background: transparent; }
+  .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  @keyframes blink  { 0%,100%{opacity:.3} 50%{opacity:1} }
 </style>
 </head>
 <body>
 
 <!-- Top bar -->
 <div class="topbar">
-  <div class="logo">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="32" height="32" style="flex-shrink:0">
+  <div class="logo" onclick="goHome()">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="30" height="30" style="flex-shrink:0">
       <defs>
         <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style="stop-color:#6e5bf0"/>
@@ -554,8 +608,11 @@
   </div>
   <div class="topbar-right">
     <span id="trial-badge" class="trial-badge" style="display:none"></span>
-    <button class="btn-sm" id="usage-btn" onclick="toggleUsage()" style="display:none" title="AI usage & costs">💰</button>
-    <span id="user-name" style="font-size:0.85rem;color:var(--muted)"></span>
+    <button class="btn-sm" id="usage-btn" onclick="toggleUsage()" style="display:none" title="AI usage">💰</button>
+    <span id="user-name" style="font-size:0.83rem;color:var(--muted)"></span>
+    <button class="apps-btn" id="apps-btn" onclick="openAppLibrary()" title="App Library" style="display:none">
+      ⊞ <span style="font-size:0.8rem">Apps</span>
+    </button>
     <button class="btn-sm" id="auth-btn" onclick="showAuth()">Sign in</button>
   </div>
 </div>
@@ -567,85 +624,41 @@
   <div class="usage-row"><span>Cost today</span><strong id="u-daily">—</strong></div>
   <div class="usage-row"><span>Cost this month</span><strong id="u-monthly">—</strong></div>
   <div class="usage-row" id="u-limit-row" style="display:none"><span>Daily limit</span><strong id="u-limit">—</strong></div>
-  <hr style="border-color:var(--border);margin:0.6rem 0;">
-  <div style="font-size:0.78rem;color:var(--muted)">All conversations are private and encrypted. Your data is never used for AI training.</div>
+  <hr style="border-color:var(--border);margin:0.5rem 0;">
+  <div style="font-size:0.76rem;color:var(--muted)">Private and never used for AI training.</div>
 </div>
 
-<!-- Main layout -->
-<div class="layout">
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <img src="/static/logo.svg" width="20" height="20" alt="">
-      <span>AdaDo</span>
-    </div>
-    <div class="chat-item active" id="ci-general" onclick="switchThread('general')">
-      <span class="ci-icon">⚡</span>
-      <span class="ci-name">General</span>
-    </div>
-    <hr class="sidebar-divider">
-    <div class="sidebar-section">Apps</div>
-    <div class="app-chat-list" id="app-chat-list">
-      <!-- populated by JS -->
-    </div>
-    <div class="sidebar-footer">
-      <button class="sidebar-add-btn" onclick="openAppLibrary()">+ App Library</button>
-    </div>
-  </aside>
+<!-- Chat area (full width) -->
+<main class="chat-area">
+  <div class="messages" id="messages">
+    <!-- Welcome state injected by JS -->
+  </div>
 
-  <!-- Chat area -->
-  <main class="chat-area">
-    <div class="messages" id="messages">
-      <!-- Welcome state -->
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="64" height="64">
-            <defs>
-              <linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#6e5bf0"/>
-                <stop offset="100%" style="stop-color:#a78bfa"/>
-              </linearGradient>
-            </defs>
-            <rect width="48" height="48" rx="14" fill="#1e1b2e"/>
-            <polygon points="24,7 39,41 9,41" fill="none" stroke="url(#wg)" stroke-width="3.5" stroke-linejoin="round"/>
-            <line x1="14" y1="31" x2="34" y2="31" stroke="url(#wg)" stroke-width="3"/>
-            <circle cx="39" cy="8" r="5" fill="#6e5bf0"/>
-          </svg>
-        </div>
-        <h2 id="welcome-h">What do you need done?</h2>
-        <p>Just say it in plain English. Ada handles the rest — no setup, no docs, no learning curve.</p>
-        <div class="suggestions">
-          <span class="suggestion" onclick="sendSuggestion(this)">What's on my plate today?</span>
-          <span class="suggestion" onclick="sendSuggestion(this)">Check my recent emails</span>
-          <span class="suggestion" onclick="sendSuggestion(this)">Add a task to my projects</span>
-          <span class="suggestion" onclick="sendSuggestion(this)">How's my budget looking?</span>
-          <span class="suggestion" onclick="sendSuggestion(this)">What can Ada do?</span>
-          <span class="suggestion" onclick="sendSuggestion(this)">Summarise my week</span>
-        </div>
-        <div style="font-size:0.72rem;color:var(--muted);text-align:left;margin:1rem 0 0.4rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Your App Library — market-leading tools, each with its own Ada agent. Click Add to enable.</div>
-        <div class="app-tiles" id="welcome-tiles"><!-- populated by JS --></div>
-      </div>
-    </div>
+  <div class="input-area">
+    <!-- Connected app tabs (shown when apps are added) -->
+    <div class="app-tabs" id="app-tabs" style="display:none"></div>
+
     <div class="input-row">
-      <div class="input-wrap">
-        <textarea id="input" placeholder="Message Ada… (or tap 🎤)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-      </div>
-      <button class="send-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input" style="background:var(--surface2);border:1px solid var(--border);font-size:1.1rem;">🎤</button>
+      <textarea id="input" placeholder="Ada do something…" rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input">🎤</button>
       <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
     </div>
-    <p style="text-align:center;font-size:0.72rem;color:var(--muted);padding:0.35rem 1rem 0.5rem;flex-shrink:0;">Ada is powered by AI. Conversations are private and never used for training.</p>
-  </main>
-</div>
+    <p class="input-hint">Ada is powered by AI · Conversations are private and never used for training.</p>
+  </div>
+</main>
 
 <!-- App Library modal -->
 <div class="modal-overlay" id="app-library-modal" style="display:none" onclick="if(event.target===this)closeAppLibrary()">
-  <div class="modal" style="width:540px;max-width:95vw;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+  <div class="modal">
+    <div class="modal-header">
       <h2>App Library</h2>
       <button class="btn-sm" onclick="closeAppLibrary()">✕</button>
     </div>
-    <p>Enable an app to open a dedicated chat thread in your sidebar.</p>
-    <div class="lib-tiles" id="lib-tiles"></div>
+    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.75rem;">Add an app to give Ada a specialist agent for that area.</p>
+    <div class="modal-body">
+      <div class="lib-tiles" id="lib-tiles"></div>
+    </div>
   </div>
 </div>
 
@@ -653,7 +666,7 @@
 <div class="onboard-overlay" id="onboard-overlay" style="display:none">
   <div class="onboard-card">
     <div class="onboard-logo">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="28" height="28">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="26" height="26">
         <defs><linearGradient id="og" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6e5bf0"/><stop offset="100%" style="stop-color:#a78bfa"/></linearGradient></defs>
         <rect width="48" height="48" rx="10" fill="#1e1b2e"/>
         <polygon points="24,8 38,40 10,40" fill="none" stroke="url(#og)" stroke-width="3.5" stroke-linejoin="round"/>
@@ -667,56 +680,47 @@
       <div class="onboard-dot" id="dot-1"></div>
       <div class="onboard-dot" id="dot-2"></div>
     </div>
-
-    <!-- Step 1: Role -->
     <div class="onboard-step active" id="ob-step-0">
       <h2>What do you do?</h2>
-      <p class="sub">Ada personalises everything to you. This takes 30 seconds.</p>
+      <p class="sub">Ada personalises everything to you. Takes 30 seconds.</p>
       <input class="onboard-input" id="ob-role" type="text" placeholder="e.g. student, freelancer, small business owner…">
       <button class="onboard-btn" onclick="obNext(1)">Next →</button>
-      <div class="onboard-skip" onclick="obSkip()">Skip setup — I'll do it later</div>
+      <div class="onboard-skip" onclick="obSkip()">Skip — do this later</div>
     </div>
-
-    <!-- Step 2: Use cases -->
     <div class="onboard-step" id="ob-step-1">
-      <h2>What do you want Ada to help with?</h2>
-      <p class="sub">Pick everything that applies. Ada will focus here.</p>
+      <h2>What should Ada help with?</h2>
+      <p class="sub">Pick everything that applies.</p>
       <div class="chips" id="ob-chips">
         <div class="chip" onclick="toggleChip(this)" data-val="Projects">📋 Projects</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Finance">💰 Finance</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Email">📧 Email</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Research">🔍 Research</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Writing">✍️ Writing</div>
-        <div class="chip" onclick="toggleChip(this)" data-val="Home Automation">🏠 Home Automation</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Home Automation">🏠 Home</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Health">🏥 Health</div>
-        <div class="chip" onclick="toggleChip(this)" data-val="Social Media">📱 Social Media</div>
-        <div class="chip" onclick="toggleChip(this)" data-val="Documents">📄 Documents</div>
-        <div class="chip" onclick="toggleChip(this)" data-val="Code & Dev">💻 Code & Dev</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Social Media">📱 Social</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="Code & Dev">💻 Code</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Trading">📈 Trading</div>
         <div class="chip" onclick="toggleChip(this)" data-val="Business">🏢 Business</div>
-        <div class="chip" onclick="toggleChip(this)" data-val="General Productivity">⚡ General Productivity</div>
+        <div class="chip" onclick="toggleChip(this)" data-val="General Productivity">⚡ Productivity</div>
       </div>
       <select class="onboard-input" id="ob-exp">
         <option value="beginner">New to AI — explain things simply</option>
         <option value="intermediate" selected>Familiar with AI — be efficient</option>
-        <option value="advanced">Experienced AI user — be terse</option>
+        <option value="advanced">Experienced — be terse</option>
       </select>
       <button class="onboard-btn" onclick="obNext(2)">Next →</button>
     </div>
-
-    <!-- Step 3: Goals -->
     <div class="onboard-step" id="ob-step-2">
       <h2>Anything Ada should know?</h2>
-      <p class="sub">Optional context that helps Ada calibrate to you. Any detail is fine.</p>
-      <textarea class="onboard-input" id="ob-goals" rows="4" placeholder="e.g. I run a small business from home, I have ADHD, I'm building a startup, I'm studying part-time…" style="resize:none;line-height:1.5;"></textarea>
+      <p class="sub">Optional. Any context helps Ada calibrate to you.</p>
+      <textarea class="onboard-input" id="ob-goals" rows="4" placeholder="e.g. I run a small business, I have ADHD, studying part-time…" style="resize:none;line-height:1.5;"></textarea>
       <button class="onboard-btn" id="ob-finish-btn" onclick="doOnboard()">Start using Ada →</button>
     </div>
-
-    <!-- Done -->
     <div class="onboard-step" id="ob-done">
       <div class="done-icon">⚡</div>
       <div class="done-h">Ada is ready.</div>
-      <div class="done-sub">Everything is set up for you. Just start talking — Ada will figure out the rest.</div>
+      <div class="done-sub">Just start talking — Ada figures out the rest.</div>
       <button class="onboard-btn" onclick="closeOnboard()">Let's go →</button>
     </div>
   </div>
@@ -724,7 +728,7 @@
 
 <!-- Auth modal -->
 <div class="modal-overlay" id="auth-modal" style="display:none">
-  <div class="modal">
+  <div class="auth-modal">
     <h2 id="auth-title">Sign in</h2>
     <p id="auth-sub">Your AI assistant is waiting.</p>
     <div class="field" id="name-field" style="display:none">
@@ -746,13 +750,13 @@
       <a onclick="toggleAuth()" id="auth-switch-link">Create one</a>
     </div>
     <div style="text-align:center;margin-top:0.75rem">
-      <a onclick="closeAuth()" style="font-size:0.82rem;color:var(--muted);cursor:pointer">Continue as guest</a>
+      <a onclick="closeAuth()" style="font-size:0.81rem;color:var(--muted);cursor:pointer">Continue as guest</a>
     </div>
   </div>
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────────────────
+// ─── State ─────────────────────────────────────────────────────────────────
 let ws = null;
 let streaming = false;
 let streamBubble = null;
@@ -760,168 +764,97 @@ let isSignup = false;
 let token = localStorage.getItem('adado_token');
 let userName = localStorage.getItem('adado_name');
 let _appsCache = [];
+let activeAgent = null; // null = general Ada, string = agent id
 
-// Per-app agent WS pool: slug -> WebSocket
-const appWS = {};
-function activeWS() {
-  if (activeThread === 'general') return ws;
-  const aw = appWS[activeThread];
-  if (aw && aw.readyState === WebSocket.OPEN) return aw;
-  return ws; // fallback to general if app WS not ready yet
+// Per-agent WS pool
+const agentWS = {};
+
+// Added apps (persisted)
+function getAddedApps() {
+  return JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');
+}
+function setAddedApps(arr) {
+  localStorage.setItem('adado_enabled_apps', JSON.stringify(arr));
 }
 
-// ─── Thread state ─────────────────────────────────────────────────────────────
-const threads = { general: [] };
-const threadMeta = {
-  general: { name: 'General', icon: '⚡', placeholder: 'Message Ada… (or tap 🎤)' }
-};
-let activeThread = 'general';
-const threadFirstSent = new Set(['general']);
-
-// ─── Markdown renderer ───────────────────────────────────────────────────────
+// ─── Markdown ───────────────────────────────────────────────────────────────
 function renderMarkdown(text) {
   let s = text
-    // code blocks
     .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
       `<pre><code>${escapeHtml(code.trim())}</code></pre>`)
-    // inline code
     .replace(/`([^`]+)`/g, (_, c) => `<code>${escapeHtml(c)}</code>`)
-    // headings
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // bold + italic
+    .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/__(.+?)__/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // horizontal rule
     .replace(/^---$/gm, '<hr>')
-    // blockquote
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // unordered list (convert lines)
     .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-    // ordered list
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-    // wrap consecutive <li> in <ul>
-    .replace(/(<li>[\s\S]*?<\/li>)(?=\s*<li>|$)/g, m => m)
-    // links
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // paragraphs — wrap non-tag lines
     .split('\n')
     .map(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return '';
-      if (/^<(h[1-3]|pre|ul|ol|li|hr|blockquote|p)/.test(trimmed)) return trimmed;
-      return `<p>${trimmed}</p>`;
+      const t = line.trim();
+      if (!t) return '';
+      if (/^<(h[1-3]|pre|ul|ol|li|hr|blockquote|p)/.test(t)) return t;
+      return `<p>${t}</p>`;
     })
     .join('\n');
-
-  // Wrap consecutive <li> tags in <ul>
-  s = s.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
-  return s;
+  return s.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
 }
 
-// ─── Init ────────────────────────────────────────────────────────────────────
+// ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadApps();
   updateAuthUI();
   connectWS();
+  renderWelcome();
   document.addEventListener('click', e => {
-    if (!e.target.closest('#usage-panel') && !e.target.closest('#usage-btn')) {
+    if (!e.target.closest('#usage-panel') && !e.target.closest('#usage-btn'))
       document.getElementById('usage-panel').classList.remove('open');
-    }
   });
 });
 
-// ─── Thread switching ─────────────────────────────────────────────────────────
-function switchThread(key) {
-  if (key === activeThread) return;
-
-  // Save current DOM messages
-  threads[activeThread] = captureMessages();
-
-  // Update sidebar highlights
-  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-  const target = document.getElementById(`ci-${key}`);
-  if (target) target.classList.add('active');
-
-  activeThread = key;
-
-  // Spin up dedicated WS for app threads that have an agentId
-  if (key !== 'general') {
-    const meta = threadMeta[key] || {};
-    const existing = appWS[key];
-    if (!existing || existing.readyState > 1) {
-      createAppWS(key, meta.agentId || null);
-    }
-  }
-
-  // Restore messages (or welcome screen)
-  restoreMessages(threads[key], key);
-
-  // Update input placeholder
-  const meta = threadMeta[key];
-  const input = document.getElementById('input');
-  if (meta) input.placeholder = meta.placeholder;
-  input.focus();
+function goHome() {
+  // Reset to main Ada (no agent), clear messages, show welcome
+  activeAgent = null;
+  renderWelcome();
+  updateAppTabs();
 }
 
-function captureMessages() {
-  const msgs = document.getElementById('messages');
-  const result = [];
-  msgs.querySelectorAll('.msg').forEach(msgEl => {
-    result.push({ outerHTML: msgEl.outerHTML });
-  });
-  return result;
-}
-
-function restoreMessages(savedMsgs, key) {
+// ─── Welcome ────────────────────────────────────────────────────────────────
+function renderWelcome() {
   const msgs = document.getElementById('messages');
   msgs.innerHTML = '';
 
-  if (!savedMsgs || savedMsgs.length === 0) {
-    if (key === 'general') {
-      msgs.innerHTML = buildGeneralWelcome();
-    } else {
-      const meta = threadMeta[key] || {};
-      const name = escapeHtml(meta.name || key);
-      const icon = meta.icon || '🔲';
-      msgs.innerHTML = `<div class="welcome" id="welcome">
-        <div class="welcome-icon"><span style="font-size:3rem">${icon}</span></div>
-        <h2>${name}</h2>
-        <p>Ask Ada about ${name}. Your conversation stays here.</p>
-      </div>`;
-    }
-    return;
-  }
-
-  savedMsgs.forEach(({ outerHTML }) => {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = outerHTML;
-    const msgEl = tmp.firstElementChild;
-    if (msgEl) msgs.appendChild(msgEl);
-  });
-  scrollBottom();
-}
-
-function buildGeneralWelcome() {
   const firstName = (userName || '').split(' ')[0];
-  const greeting = firstName ? `Hi ${escapeHtml(firstName)}. What do you need done?` : 'What do you need done?';
-  const appsForTiles = _appsCache.length > 0 ? _appsCache : [
-    {icon:'💬',name:'Chat'},{icon:'📋',name:'Projects'},{icon:'🔒',name:'Passwords'},
-    {icon:'💰',name:'Finance'},{icon:'📧',name:'Email'},{icon:'👥',name:'CRM'},
-    {icon:'🏠',name:'Home Automation'},{icon:'📈',name:'Trading'},{icon:'✍️',name:'Writing'},
-  ];
-  const tileHTML = appsForTiles.slice(0, 9).map(app => {
-    const emoji = app.icon || app.emoji || '🔲';
-    const safeName = (app.name || '').replace(/'/g, "\\'");
-    const safeDesc = (app.description || '').replace(/'/g, "\\'");
-    return `<div class="app-tile" onclick="askAboutApp('${safeName}','${safeDesc}')"><span class="tile-icon">${emoji}</span><span>${escapeHtml(app.name)}</span></div>`;
+  const greeting = firstName
+    ? `Hi ${escapeHtml(firstName)}. What do you need done?`
+    : 'What do you need done?';
+
+  const addedSlugs = getAddedApps();
+  const addedApps  = addedSlugs.map(slug => _appsCache.find(a => slugify(a.name) === slug || a.id === slug)).filter(Boolean);
+  const allApps    = _appsCache.length > 0 ? _appsCache : _defaultApps;
+  const showApps   = addedApps.length > 0 ? addedApps : allApps.slice(0, 8);
+
+  const appCardsHTML = showApps.slice(0, 8).map(app => {
+    const slug    = app.id || slugify(app.name);
+    const emoji   = app.icon || app.emoji || '🔲';
+    const isAdded = addedSlugs.includes(slug);
+    return `<div class="app-card${isAdded ? ' added' : ''}" onclick="switchAgent('${slug}','${escapeHtml(app.name)}','${emoji}','${app.agent?.id || slug + '-agent'}')">
+      <span class="card-icon">${emoji}</span>
+      <span class="card-name">${escapeHtml(app.name)}</span>
+    </div>`;
   }).join('');
-  return `<div class="welcome" id="welcome">
+
+  const appsLabel = addedApps.length > 0 ? 'Your apps' : 'App Library — click to explore';
+
+  msgs.innerHTML = `<div class="welcome" id="welcome">
     <div class="welcome-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="64" height="64">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="60" height="60">
         <defs><linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6e5bf0"/><stop offset="100%" style="stop-color:#a78bfa"/></linearGradient></defs>
         <rect width="48" height="48" rx="14" fill="#1e1b2e"/>
         <polygon points="24,7 39,41 9,41" fill="none" stroke="url(#wg)" stroke-width="3.5" stroke-linejoin="round"/>
@@ -930,78 +863,84 @@ function buildGeneralWelcome() {
       </svg>
     </div>
     <h2 id="welcome-h">${greeting}</h2>
-    <p>Just say it in plain English. Ada handles the rest — no setup, no docs, no learning curve.</p>
+    <p>Say it in plain English. Ada handles the rest — no setup, no docs, no learning curve.</p>
     <div class="suggestions">
       <span class="suggestion" onclick="sendSuggestion(this)">What's on my plate today?</span>
       <span class="suggestion" onclick="sendSuggestion(this)">Check my recent emails</span>
-      <span class="suggestion" onclick="sendSuggestion(this)">Add a task to my projects</span>
       <span class="suggestion" onclick="sendSuggestion(this)">How's my budget looking?</span>
       <span class="suggestion" onclick="sendSuggestion(this)">What can Ada do?</span>
+      <span class="suggestion" onclick="sendSuggestion(this)">Add a task</span>
       <span class="suggestion" onclick="sendSuggestion(this)">Summarise my week</span>
     </div>
-    <div style="font-size:0.72rem;color:var(--muted);text-align:left;margin:1rem 0 0.4rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Your App Library — market-leading tools, each with its own Ada agent. Click Add to enable.</div>
-    <div class="app-tiles" id="welcome-tiles">${tileHTML}</div>
+    <div class="welcome-apps-label">${appsLabel}</div>
+    <div class="app-grid">
+      ${appCardsHTML}
+      <div class="add-apps-btn" onclick="openAppLibrary()">
+        <span style="font-size:1.3rem">＋</span>
+        <span>More apps</span>
+      </div>
+    </div>
   </div>`;
 }
 
-function updateAuthUI() {
-  const btn = document.getElementById('auth-btn');
-  const nameEl = document.getElementById('user-name');
-  const trialBadge = document.getElementById('trial-badge');
-  const usageBtn = document.getElementById('usage-btn');
-  if (token && userName) {
-    nameEl.textContent = userName;
-    btn.textContent = 'Sign out';
-    btn.onclick = signOut;
-    usageBtn.style.display = '';
-    // Load trial + usage data
-    fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
-      .then(r => r.json()).then(me => {
-        const wh = document.getElementById('welcome-h');
-        if (me.name && wh) wh.textContent = `Hi ${me.name.split(' ')[0]}. What do you need done?`;
-        if (me.trial_active) {
-          const d = me.trial_days_left;
-          trialBadge.style.display = '';
-          trialBadge.textContent = d <= 1 ? `Trial ends today` : `${d}d trial left`;
-          trialBadge.className = d <= 2 ? 'trial-badge warn' : 'trial-badge';
-        } else {
-          trialBadge.style.display = 'none';
-        }
-      }).catch(() => {});
-  } else {
-    nameEl.textContent = '';
-    btn.textContent = 'Sign in';
-    btn.onclick = showAuth;
-    trialBadge.style.display = 'none';
-    usageBtn.style.display = 'none';
+// ─── Agent switching ─────────────────────────────────────────────────────────
+function switchAgent(slug, name, icon, agentId) {
+  activeAgent = agentId || (slug + '-agent');
+
+  // Ensure WS for this agent
+  if (!agentWS[activeAgent] || agentWS[activeAgent].readyState > 1) {
+    createAgentWS(activeAgent);
   }
+
+  // Clear messages, show agent welcome
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = `<div class="welcome" id="welcome">
+    <div class="welcome-icon"><span style="font-size:3.5rem">${icon}</span></div>
+    <h2>${escapeHtml(name)}</h2>
+    <p>Ada's ${escapeHtml(name)} agent is ready. Ask anything about ${escapeHtml(name)}.</p>
+  </div>`;
+
+  updateAppTabs();
+  document.getElementById('input').placeholder = `Ask ${name} agent…`;
+  document.getElementById('input').focus();
 }
 
-async function toggleUsage() {
-  const panel = document.getElementById('usage-panel');
-  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
-  try {
-    const res = await fetch('/api/usage/summary', { headers: { 'Authorization': `Bearer ${token}` } });
-    const d = await res.json();
-    const todayTokens = (d.today || []).reduce((a, r) => a + (r.i||0) + (r.o||0), 0);
-    document.getElementById('u-tokens').textContent = todayTokens.toLocaleString();
-    document.getElementById('u-daily').textContent = `$${(d.daily_spent || 0).toFixed(4)}`;
-    document.getElementById('u-monthly').textContent = `$${(d.monthly_spent || 0).toFixed(4)}`;
-    if (d.daily_limit) {
-      document.getElementById('u-limit-row').style.display = '';
-      document.getElementById('u-limit').textContent = `$${d.daily_limit.toFixed(2)}`;
-    }
-  } catch(e) {}
-  panel.classList.add('open');
+// ─── App tabs above input ────────────────────────────────────────────────────
+function updateAppTabs() {
+  const tabsEl = document.getElementById('app-tabs');
+  const added  = getAddedApps();
+
+  if (added.length === 0) { tabsEl.style.display = 'none'; return; }
+
+  const apps = added.map(slug => _appsCache.find(a => a.id === slug || slugify(a.name) === slug)).filter(Boolean);
+  if (apps.length === 0) { tabsEl.style.display = 'none'; return; }
+
+  tabsEl.style.display = 'flex';
+  tabsEl.innerHTML = `<div class="app-tab${activeAgent === null ? ' active' : ''}" onclick="goHome()">⚡ Ada</div>` +
+    apps.map(app => {
+      const slug    = app.id || slugify(app.name);
+      const agentId = app.agent?.id || slug + '-agent';
+      const emoji   = app.icon || app.emoji || '🔲';
+      const isActive = activeAgent === agentId;
+      return `<div class="app-tab${isActive ? ' active' : ''}" onclick="switchAgent('${slug}','${escapeHtml(app.name)}','${emoji}','${agentId}')">
+        ${emoji} ${escapeHtml(app.name)}
+        <span class="tab-x" onclick="event.stopPropagation();removeApp('${slug}')">✕</span>
+      </div>`;
+    }).join('');
 }
 
-// ─── WebSocket ───────────────────────────────────────────────────────────────
-// Shared WS message handler — general and per-app WS both call this
-function handleWSMsg(msg, isGeneral) {
+function removeApp(slug) {
+  const arr = getAddedApps().filter(s => s !== slug);
+  setAddedApps(arr);
+  if (activeAgent && activeAgent.startsWith(slug)) { activeAgent = null; }
+  updateAppTabs();
+  renderWelcome();
+}
+
+// ─── WebSocket ──────────────────────────────────────────────────────────────
+function handleWSMsg(msg) {
   if (msg.type === 'ready') {
-    if (isGeneral && token && msg.onboarding_complete === false) {
-      showOnboarding();
-    }
+    if (!activeAgent && token && msg.onboarding_complete === false) showOnboarding();
     return;
   }
   if (msg.type === 'start') {
@@ -1009,135 +948,76 @@ function handleWSMsg(msg, isGeneral) {
     streamBubble = addBubble('ada', '');
     document.getElementById('send-btn').disabled = true;
   } else if (msg.type === 'chunk') {
-    if (streamBubble) {
-      streamBubble.textContent += msg.content;
-      scrollBottom();
-    }
+    if (streamBubble) { streamBubble.textContent += msg.content; scrollBottom(); }
   } else if (msg.type === 'done') {
     streaming = false;
     finaliseAdaBubble(streamBubble);
     streamBubble = null;
     document.getElementById('send-btn').disabled = false;
   } else if (msg.type === 'error') {
-    addBubble('ada', '⚠️ ' + msg.content);
+    if (streamBubble) { finaliseAdaBubble(streamBubble); streamBubble = null; }
+    addBubble('ada', '⚠️ ' + (msg.content || msg.message || 'Something went wrong'));
     document.getElementById('send-btn').disabled = false;
+    streaming = false;
   }
 }
 
 function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
   const params = token ? `?token=${token}` : '';
   ws = new WebSocket(`${proto}://${location.host}/ws/chat${params}`);
-
-  ws.onmessage = (e) => {
-    // Only handle messages for the general thread
-    if (activeThread !== 'general') return;
-    handleWSMsg(JSON.parse(e.data), true);
-  };
-
-  ws.onclose = () => { setTimeout(connectWS, 2000); };
+  ws.onmessage = (e) => { if (!activeAgent) handleWSMsg(JSON.parse(e.data)); };
+  ws.onclose   = () => { setTimeout(connectWS, 2000); };
 }
 
-// Create (or reconnect) a per-app WS for a given slug + agentId
-function createAppWS(slug, agentId) {
-  if (appWS[slug] && appWS[slug].readyState < 2) {
-    try { appWS[slug].close(); } catch(e) {}
-  }
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const parts = [];
-  if (token) parts.push(`token=${encodeURIComponent(token)}`);
+function createAgentWS(agentId) {
+  const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
+  const parts  = [];
+  if (token)   parts.push(`token=${encodeURIComponent(token)}`);
   if (agentId) parts.push(`agent=${encodeURIComponent(agentId)}`);
   const url = `${proto}://${location.host}/ws/chat${parts.length ? '?' + parts.join('&') : ''}`;
-
-  const aw = new WebSocket(url);
-  aw.onmessage = (e) => {
-    if (activeThread !== slug) return;
-    handleWSMsg(JSON.parse(e.data), false);
-  };
-  aw.onclose = () => {
-    if (activeThread === slug) setTimeout(() => createAppWS(slug, agentId), 2000);
-  };
-  appWS[slug] = aw;
+  const aw  = new WebSocket(url);
+  aw.onmessage = (e) => { if (activeAgent === agentId) handleWSMsg(JSON.parse(e.data)); };
+  aw.onclose   = () => { if (activeAgent === agentId) setTimeout(() => createAgentWS(agentId), 2000); };
+  agentWS[agentId] = aw;
   return aw;
 }
 
-// ─── Messaging ───────────────────────────────────────────────────────────────
+function currentWS() {
+  if (!activeAgent) return ws;
+  const aw = agentWS[activeAgent];
+  if (aw && aw.readyState === WebSocket.OPEN) return aw;
+  return ws;
+}
+
+// ─── Messaging ──────────────────────────────────────────────────────────────
 function sendMessage() {
   const input = document.getElementById('input');
-  const text = input.value.trim();
-  const aw = activeWS();
-  if (!text || streaming || !aw || aw.readyState !== WebSocket.OPEN) return;
+  const text  = input.value.trim();
+  const cws   = currentWS();
+  if (!text || streaming || !cws || cws.readyState !== WebSocket.OPEN) return;
 
   hideWelcome();
   addBubble('user', text);
   input.value = '';
   autoResize(input);
-
-  aw.send(JSON.stringify({ content: text }));
-}
-
-// ─── Voice input ──────────────────────────────────────────────────────────────
-let recognition = null;
-let listening = false;
-
-function toggleVoice() {
-  const btn = document.getElementById('mic-btn');
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    btn.title = 'Voice not supported in this browser';
-    btn.textContent = '🚫';
-    return;
-  }
-  if (listening) {
-    recognition && recognition.stop();
-    return;
-  }
-  recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = 'en-AU';
-
-  const input = document.getElementById('input');
-  recognition.onstart = () => {
-    listening = true;
-    btn.textContent = '🔴';
-    btn.style.background = 'rgba(239,68,68,0.2)';
-    btn.style.borderColor = '#ef4444';
-  };
-  recognition.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    input.value = transcript;
-    autoResize(input);
-  };
-  recognition.onend = () => {
-    listening = false;
-    btn.textContent = '🎤';
-    btn.style.background = 'var(--surface2)';
-    btn.style.borderColor = 'var(--border)';
-    if (input.value.trim()) sendMessage();
-  };
-  recognition.onerror = () => { recognition.stop(); };
-  recognition.start();
+  cws.send(JSON.stringify({ content: text }));
 }
 
 function sendSuggestion(el) {
-  const text = el.textContent;
-  document.getElementById('input').value = text;
+  document.getElementById('input').value = el.textContent;
   sendMessage();
 }
 
 function addBubble(role, text) {
-  const msgs = document.getElementById('messages');
-  const msg = document.createElement('div');
+  const msgs   = document.getElementById('messages');
+  const msg    = document.createElement('div');
   msg.className = `msg ${role}`;
-  const bubble = document.createElement('div');
+  const bubble  = document.createElement('div');
   bubble.className = 'bubble';
-  if (role === 'ada' && text) {
-    bubble.innerHTML = renderMarkdown(text);
-  } else {
-    bubble.textContent = text;
-  }
-  const avatar = document.createElement('div');
+  if (role === 'ada' && text) bubble.innerHTML = renderMarkdown(text);
+  else bubble.textContent = text;
+  const avatar  = document.createElement('div');
   avatar.className = 'avatar';
   avatar.textContent = role === 'ada' ? '⚡' : '👤';
   msg.appendChild(avatar);
@@ -1148,16 +1028,14 @@ function addBubble(role, text) {
 }
 
 function finaliseAdaBubble(bubble) {
-  if (bubble && bubble.classList.contains('bubble')) {
-    const rawText = bubble.textContent;
-    bubble.innerHTML = renderMarkdown(rawText);
+  if (bubble?.classList.contains('bubble')) {
+    bubble.innerHTML = renderMarkdown(bubble.textContent);
     scrollBottom();
   }
 }
 
 function hideWelcome() {
-  const w = document.getElementById('welcome');
-  if (w) w.remove();
+  document.getElementById('welcome')?.remove();
 }
 
 function scrollBottom() {
@@ -1166,33 +1044,44 @@ function scrollBottom() {
 }
 
 function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 function autoResize(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
 }
 
-function openChat() {
-  document.getElementById('input').focus();
+// ─── Voice ──────────────────────────────────────────────────────────────────
+let recognition = null, listening = false;
+
+function toggleVoice() {
+  const btn = document.getElementById('mic-btn');
+  const SR  = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { btn.textContent = '🚫'; return; }
+  if (listening) { recognition?.stop(); return; }
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-AU';
+  const input = document.getElementById('input');
+  recognition.onstart  = () => { listening = true;  btn.textContent = '🔴'; };
+  recognition.onresult = (e) => { input.value = Array.from(e.results).map(r => r[0].transcript).join(''); autoResize(input); };
+  recognition.onend    = () => { listening = false; btn.textContent = '🎤'; if (input.value.trim()) sendMessage(); };
+  recognition.onerror  = () => { recognition.stop(); };
+  recognition.start();
 }
 
-// ─── Apps ────────────────────────────────────────────────────────────────────
+// ─── Apps ───────────────────────────────────────────────────────────────────
 const _defaultApps = [
-  { icon: '📋', name: 'Projects',       slug: 'projects' },
-  { icon: '🔒', name: 'Passwords',      slug: 'passwords' },
-  { icon: '💰', name: 'Finance',        slug: 'finance' },
-  { icon: '👥', name: 'CRM',            slug: 'crm' },
-  { icon: '🏠', name: 'Home Automation',slug: 'home-automation' },
-  { icon: '📈', name: 'Trading',        slug: 'trading' },
-  { icon: '✍️', name: 'Writing',        slug: 'writing' },
-  { icon: '🔍', name: 'Research',       slug: 'research' },
-  { icon: '💻', name: 'Code & Dev',     slug: 'code-dev' },
-  { icon: '📱', name: 'Social Media',   slug: 'social-media' },
+  { id:'adado-finance',  icon:'💰', name:'Finance',   agent:{id:'adado-finance-agent'} },
+  { id:'adado-projects', icon:'📋', name:'Projects',  agent:{id:'adado-projects-agent'} },
+  { id:'adado-health',   icon:'🏥', name:'Health',    agent:{id:'adado-health-agent'} },
+  { id:'adado-inbox',    icon:'📬', name:'Inbox',     agent:{id:'adado-inbox-agent'} },
+  { id:'adado-notes',    icon:'📝', name:'Notes',     agent:{id:'adado-notes-agent'} },
+  { id:'adado-security', icon:'🛡️', name:'Security',  agent:{id:'adado-security-agent'} },
+  { id:'adado-homelab',  icon:'🏠', name:'Home Lab',  agent:{id:'adado-homelab-agent'} },
+  { id:'adado-social',   icon:'📱', name:'Social',    agent:{id:'adado-social-agent'} },
 ];
 
 function slugify(name) {
@@ -1201,110 +1090,51 @@ function slugify(name) {
 
 async function loadApps() {
   try {
-    const res = await fetch('/api/apps');
-    const apps = await res.json();
-    _appsCache = apps.length > 0 ? apps : _defaultApps;
+    const res  = await fetch('/api/apps');
+    const data = await res.json();
+    _appsCache = (Array.isArray(data) ? data : data.apps || []).filter(Boolean);
+    if (!_appsCache.length) _appsCache = _defaultApps;
   } catch(e) {
     _appsCache = _defaultApps;
-    console.log('Apps load error:', e);
   }
-
-  // Top 5 from API/defaults go into sidebar
-  const sidebarApps = [..._appsCache.slice(0, 5)];
-
-  // Merge locally-enabled extras
-  const localEnabled = JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');
-  localEnabled.forEach(slug => {
-    const found = _appsCache.find(a => (a.slug || slugify(a.name)) === slug);
-    if (found) {
-      const fSlug = found.slug || slugify(found.name);
-      if (!sidebarApps.find(a => (a.slug || slugify(a.name)) === fSlug)) {
-        sidebarApps.push(found);
-      }
-    }
-  });
-
-  sidebarApps.forEach(app => addAppToSidebar(app));
-
-  // Update welcome tiles if still on initial general welcome
-  const tiles = document.getElementById('welcome-tiles');
-  if (tiles && activeThread === 'general') {
-    tiles.innerHTML = '';
-    _appsCache.slice(0, 9).forEach(app => {
-      const emoji = app.icon || app.emoji || '🔲';
-      const t = document.createElement('div');
-      t.className = 'app-tile';
-      t.innerHTML = `<span class="tile-icon">${emoji}</span><span>${escapeHtml(app.name)}</span>`;
-      t.onclick = () => askAboutApp(app.name, app.description || '');
-      tiles.appendChild(t);
-    });
-  }
+  renderWelcome();
+  updateAppTabs();
 }
 
-function addAppToSidebar(app) {
-  const slug = app.slug || slugify(app.name);
-  if (document.getElementById(`ci-${slug}`)) return; // already present
-
-  const emoji = app.icon || app.emoji || '🔲';
-  if (!threads[slug]) threads[slug] = [];
-  threadMeta[slug] = {
-    name: app.name,
-    icon: emoji,
-    placeholder: `Ask ${app.name} agent…`,
-    slug,
-    agentId: (app.agent && app.agent.id) || null,
-  };
-
-  const list = document.getElementById('app-chat-list');
-  const el = document.createElement('div');
-  el.className = 'chat-item';
-  el.id = `ci-${slug}`;
-  el.innerHTML = `<span class="ci-icon">${emoji}</span><span class="ci-name">${escapeHtml(app.name)}</span>`;
-  el.onclick = () => switchThread(slug);
-  list.appendChild(el);
-}
-
-function askAboutApp(name, desc) {
-  const q = desc ? `Tell me about the ${name} app and what I can do with it.` : `What can you do with ${name}?`;
-  document.getElementById('input').value = q;
-  sendMessage();
-}
-
-// ─── App Library ──────────────────────────────────────────────────────────────
+// ─── App Library modal ───────────────────────────────────────────────────────
 function openAppLibrary() {
-  const modal = document.getElementById('app-library-modal');
-  const tiles = document.getElementById('lib-tiles');
-  const enabledSlugs = new Set(Object.keys(threads).filter(k => k !== 'general'));
+  const modal     = document.getElementById('app-library-modal');
+  const tilesEl   = document.getElementById('lib-tiles');
+  const addedSlugs = new Set(getAddedApps());
+  const allApps   = _appsCache.length ? _appsCache : _defaultApps;
 
-  const allApps = _appsCache.length > 0 ? _appsCache : _defaultApps;
-  tiles.innerHTML = '';
+  tilesEl.innerHTML = '';
   allApps.forEach(app => {
-    const slug = app.slug || slugify(app.name);
-    const emoji = app.icon || app.emoji || '🔲';
-    const isEnabled = enabledSlugs.has(slug);
+    const slug    = app.id || slugify(app.name);
+    const emoji   = app.icon || app.emoji || '🔲';
+    const isAdded = addedSlugs.has(slug);
+    const isSoon  = !!app.coming_soon;
 
-    const isComingSoon = !!app.coming_soon;
     const tile = document.createElement('div');
-    tile.className = `lib-tile${isEnabled ? ' enabled' : ''}${isComingSoon ? ' coming-soon' : ''}`;
-    tile.id = `lt-${slug}`;
+    tile.className = `lib-tile${isAdded ? ' enabled' : ''}${isSoon ? ' coming-soon' : ''}`;
     tile.innerHTML = `
       <span class="lt-icon">${emoji}</span>
       <span class="lt-name">${escapeHtml(app.name)}</span>
-      <span class="lt-action">${isEnabled ? '✓ Added' : isComingSoon ? 'Coming Soon' : '+ Enable'}</span>
+      <span class="lt-action">${isAdded ? '✓ Added' : isSoon ? 'Coming soon' : '+ Add'}</span>
     `;
-    if (!isEnabled && !isComingSoon) {
+    if (!isAdded && !isSoon) {
       tile.onclick = () => {
-        addAppToSidebar(app);
-        const stored = JSON.parse(localStorage.getItem('adado_enabled_apps') || '[]');
-        if (!stored.includes(slug)) {
-          stored.push(slug);
-          localStorage.setItem('adado_enabled_apps', JSON.stringify(stored));
-        }
+        const arr = getAddedApps();
+        if (!arr.includes(slug)) { arr.push(slug); setAddedApps(arr); }
         closeAppLibrary();
-        switchThread(slug);
+        updateAppTabs();
+        renderWelcome();
+        // Auto-switch to the newly added agent
+        const agentId = app.agent?.id || slug + '-agent';
+        switchAgent(slug, app.name, emoji, agentId);
       };
     }
-    tiles.appendChild(tile);
+    tilesEl.appendChild(tile);
   });
 
   modal.style.display = 'flex';
@@ -1314,57 +1144,97 @@ function closeAppLibrary() {
   document.getElementById('app-library-modal').style.display = 'none';
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-function showAuth() {
-  document.getElementById('auth-modal').style.display = 'flex';
-  document.getElementById('email-input').focus();
+// ─── Auth ───────────────────────────────────────────────────────────────────
+function updateAuthUI() {
+  const btn        = document.getElementById('auth-btn');
+  const nameEl     = document.getElementById('user-name');
+  const trialBadge = document.getElementById('trial-badge');
+  const usageBtn   = document.getElementById('usage-btn');
+  const appsBtn    = document.getElementById('apps-btn');
+
+  if (token && userName) {
+    nameEl.textContent   = userName;
+    btn.textContent      = 'Sign out';
+    btn.onclick          = signOut;
+    usageBtn.style.display = '';
+    appsBtn.style.display  = '';
+
+    fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => r.json()).then(me => {
+        const wh = document.getElementById('welcome-h');
+        if (me.name && wh) wh.textContent = `Hi ${me.name.split(' ')[0]}. What do you need done?`;
+        if (me.trial_active) {
+          const d = me.trial_days_left;
+          trialBadge.style.display = '';
+          trialBadge.textContent = d <= 1 ? 'Trial ends today' : `${d}d trial left`;
+          trialBadge.className = d <= 2 ? 'trial-badge warn' : 'trial-badge';
+        } else {
+          trialBadge.style.display = 'none';
+        }
+      }).catch(() => {});
+  } else {
+    nameEl.textContent    = '';
+    btn.textContent       = 'Sign in';
+    btn.onclick           = showAuth;
+    trialBadge.style.display = 'none';
+    usageBtn.style.display   = 'none';
+    appsBtn.style.display    = 'none';
+  }
 }
 
-function closeAuth() {
-  document.getElementById('auth-modal').style.display = 'none';
-  document.getElementById('auth-err').textContent = '';
+async function toggleUsage() {
+  const panel = document.getElementById('usage-panel');
+  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  try {
+    const res = await fetch('/api/usage/summary', { headers: { 'Authorization': `Bearer ${token}` } });
+    const d   = await res.json();
+    const tok = (d.today || []).reduce((a, r) => a + (r.i||0) + (r.o||0), 0);
+    document.getElementById('u-tokens').textContent  = tok.toLocaleString();
+    document.getElementById('u-daily').textContent   = `$${(d.daily_spent||0).toFixed(4)}`;
+    document.getElementById('u-monthly').textContent = `$${(d.monthly_spent||0).toFixed(4)}`;
+    if (d.daily_limit) {
+      document.getElementById('u-limit-row').style.display = '';
+      document.getElementById('u-limit').textContent = `$${d.daily_limit.toFixed(2)}`;
+    }
+  } catch(e) {}
+  panel.classList.add('open');
 }
+
+function showAuth() { document.getElementById('auth-modal').style.display = 'flex'; document.getElementById('email-input').focus(); }
+function closeAuth() { document.getElementById('auth-modal').style.display = 'none'; document.getElementById('auth-err').textContent = ''; }
 
 function toggleAuth() {
   isSignup = !isSignup;
-  document.getElementById('auth-title').textContent = isSignup ? 'Create account' : 'Sign in';
-  document.getElementById('auth-sub').textContent = isSignup ? 'Set up your AdaDo account.' : 'Your AI assistant is waiting.';
-  document.getElementById('auth-submit').textContent = isSignup ? 'Create account' : 'Sign in';
-  document.getElementById('name-field').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-title').textContent       = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('auth-sub').textContent         = isSignup ? 'Set up your AdaDo account.' : 'Your AI assistant is waiting.';
+  document.getElementById('auth-submit').textContent      = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('name-field').style.display     = isSignup ? 'block' : 'none';
   document.getElementById('auth-switch-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
   document.getElementById('auth-switch-link').textContent = isSignup ? 'Sign in' : 'Create one';
 }
 
 async function doAuth() {
-  const email = document.getElementById('email-input').value.trim();
+  const email    = document.getElementById('email-input').value.trim();
   const password = document.getElementById('pw-input').value;
-  const name = document.getElementById('name-input').value.trim() || 'User';
-  const errEl = document.getElementById('auth-err');
+  const name     = document.getElementById('name-input').value.trim() || 'User';
+  const errEl    = document.getElementById('auth-err');
   errEl.textContent = '';
-
   if (!email || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
-
   try {
     const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
-    const body = isSignup ? { email, password, name } : { email, password };
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
+    const body     = isSignup ? { email, password, name } : { email, password };
+    const res      = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data     = await res.json();
     if (!res.ok) { errEl.textContent = data.detail || 'Error'; return; }
-
-    token = data.token;
+    token    = data.token;
     userName = data.name;
     localStorage.setItem('adado_token', token);
-    localStorage.setItem('adado_name', userName);
+    localStorage.setItem('adado_name',  userName);
     updateAuthUI();
     closeAuth();
-    connectWS(); // reconnect with token
-  } catch(e) {
-    errEl.textContent = 'Connection error';
-  }
+    connectWS();
+    renderWelcome();
+  } catch(e) { errEl.textContent = 'Connection error'; }
 }
 
 function signOut() {
@@ -1373,29 +1243,20 @@ function signOut() {
   localStorage.removeItem('adado_name');
   updateAuthUI();
   connectWS();
-  // Close all per-app WS connections
-  Object.keys(appWS).forEach(k => { try { appWS[k].close(); } catch(e) {} delete appWS[k]; });
+  renderWelcome();
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Onboarding wizard ───────────────────────────────────────────────────────
+// ─── Onboarding ──────────────────────────────────────────────────────────────
 let obStep = 0;
-
-function showOnboarding() {
-  obStep = 0;
-  document.getElementById('onboard-overlay').style.display = 'flex';
-}
-
-function closeOnboard() {
-  document.getElementById('onboard-overlay').style.display = 'none';
-}
+function showOnboarding() { obStep = 0; document.getElementById('onboard-overlay').style.display = 'flex'; }
+function closeOnboard()    { document.getElementById('onboard-overlay').style.display = 'none'; }
 
 function obSetStep(n) {
   document.querySelectorAll('.onboard-step').forEach((el, i) => {
-    el.classList.toggle('active', i === n || el.id === 'ob-done' && n === 3);
     if (el.id === 'ob-done') el.classList.toggle('active', n === 3);
     else el.classList.toggle('active', i === n);
   });
@@ -1403,44 +1264,26 @@ function obSetStep(n) {
   obStep = n;
 }
 
-function obNext(n) {
-  obSetStep(n);
-}
-
-function toggleChip(el) {
-  el.classList.toggle('selected');
-}
-
-function obSkip() {
-  doOnboard(true);
-}
+function obNext(n) { obSetStep(n); }
+function toggleChip(el) { el.classList.toggle('selected'); }
+function obSkip() { doOnboard(true); }
 
 async function doOnboard(skip = false) {
   const btn = document.getElementById('ob-finish-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
-  const role = (document.getElementById('ob-role')?.value || '').trim();
-  const selectedChips = [...document.querySelectorAll('.chip.selected')].map(c => c.dataset.val);
-  const experience = document.getElementById('ob-exp')?.value || 'intermediate';
-  const goals = (document.getElementById('ob-goals')?.value || '').trim();
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
+  const role     = (document.getElementById('ob-role')?.value || '').trim();
+  const chips    = [...document.querySelectorAll('.chip.selected')].map(c => c.dataset.val);
+  const exp      = document.getElementById('ob-exp')?.value || 'intermediate';
+  const goals    = (document.getElementById('ob-goals')?.value || '').trim();
+  const tz       = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   try {
     await fetch('/api/auth/onboard', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ role, use_cases: selectedChips, experience, timezone: tz, goals })
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+      body: JSON.stringify({ role, use_cases: chips, experience: exp, timezone: tz, goals })
     });
   } catch(e) {}
-
-  if (skip) {
-    closeOnboard();
-  } else {
-    obSetStep(3);
-  }
+  if (skip) closeOnboard(); else obSetStep(3);
 }
 </script>
 </body>

@@ -406,9 +406,23 @@ def resolve_model(user_row) -> str:
         return preferred
     return CLAUDE_MODEL
 
+CLAUDE_PROXY_URL = os.getenv("CLAUDE_PROXY_URL", "")
+
+
 async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, model: str = None) -> tuple[str, int, int]:
     import anthropic
-    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    proxy = CLAUDE_PROXY_URL or (
+        "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+    )
+    if proxy:
+        client = anthropic.AsyncAnthropic(
+            api_key="proxy",
+            base_url=proxy,
+        )
+    elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+        client = anthropic.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+    else:
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
     full = ""
     input_tok = output_tok = 0
     async with client.messages.stream(
@@ -420,9 +434,12 @@ async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, mode
         async for chunk in stream.text_stream:
             full += chunk
             await websocket.send_json({"type": "chunk", "content": chunk})
-        usage = await stream.get_final_usage()
-        input_tok  = usage.input_tokens
-        output_tok = usage.output_tokens
+        try:
+            usage = await stream.get_final_usage()
+            input_tok  = usage.input_tokens
+            output_tok = usage.output_tokens
+        except Exception:
+            pass
     return full, input_tok, output_tok
 
 async def stream_ollama(messages: list, soul: str, websocket: WebSocket) -> tuple[str, int, int]:
