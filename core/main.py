@@ -78,6 +78,79 @@ def build_soul(name: str, onboarding: dict) -> str:
     ]
     return " ".join(p for p in parts if p)
 
+# ─── Agent coordinator ────────────────────────────────────────────────────────
+
+# Keyword-to-agent routing table. First match wins; order matters.
+_AGENT_ROUTES: list[tuple[list[str], str]] = [
+    (["email", "inbox", "mail", "message", "reply", "send", "unsubscribe"], "inbox"),
+    (["calendar", "meeting", "schedule", "event", "reminder", "appointment"], "calendar"),
+    (["task", "project", "plane", "issue", "sprint", "backlog", "ticket"], "projects"),
+    (["file", "folder", "document", "upload", "download", "storage", "nextcloud"], "files"),
+    (["git", "github", "commit", "pull request", "pr", "branch", "repo", "code"], "git"),
+    (["automat", "workflow", "n8n", "trigger", "cron", "zapier"], "automation"),
+    (["finance", "money", "invoice", "expense", "budget", "firefly", "transaction"], "finance"),
+    (["password", "secret", "credential", "vault", "bitwarden"], "passwords"),
+    (["monitor", "metric", "grafana", "alert", "cpu", "memory", "disk", "uptime"], "monitor"),
+    (["analytics", "data", "report", "chart", "dashboard"], "analytics"),
+    (["note", "writing", "draft", "doc", "blog", "obsidian"], "notes"),
+    (["health", "sleep", "exercise", "habit", "wellbeing"], "health"),
+    (["photo", "image", "picture", "album", "gallery"], "photos"),
+    (["legal", "contract", "compliance"], "legal"),
+    (["network", "vpn", "tailscale", "firewall", "dns", "port"], "network"),
+    (["homelab", "docker", "server", "container", "deploy", "infra"], "homelab"),
+    (["backup", "restore", "snapshot"], "backup"),
+    (["research", "search", "find", "explain", "why", "how", "what is"], "ai"),
+    (["chat", "social", "chatwoot", "support", "ticket"], "chat"),
+    (["shop", "buy", "order", "product", "cart"], "shopping"),
+    (["crm", "customer", "contact", "lead", "sales"], "crm"),
+    (["trading", "crypto", "stock", "market", "portfolio"], "trading"),
+]
+
+_agent_cache: dict[str, str] = {}
+
+def load_agents() -> dict[str, str]:
+    if _agent_cache:
+        return _agent_cache
+    agents_path = Path(AGENTS_DIR)
+    if not agents_path.exists():
+        return {}
+    for f in agents_path.glob("*.md"):
+        try:
+            _agent_cache[f.stem] = f.read_text()
+        except Exception:
+            pass
+    return _agent_cache
+
+def route_agent(message: str) -> str:
+    msg_lower = message.lower()
+    for keywords, agent_name in _AGENT_ROUTES:
+        if any(kw in msg_lower for kw in keywords):
+            return agent_name
+    return "ai"  # default: general reasoning agent
+
+def agent_context(agent_name: str) -> str:
+    agents = load_agents()
+    content = agents.get(agent_name, "")
+    if not content:
+        return ""
+    # Strip YAML frontmatter if present
+    lines = content.strip().splitlines()
+    if lines and lines[0] == "---":
+        try:
+            end = lines.index("---", 1)
+            lines = lines[end + 1:]
+        except ValueError:
+            pass
+    # Return first 600 chars of agent context — enough for role/scope
+    return "\n".join(lines)[:600].strip()
+
+def build_soul_with_agent(name: str, onboarding: dict, agent_name: str) -> str:
+    base = build_soul(name, onboarding)
+    ctx = agent_context(agent_name)
+    if ctx:
+        return base + f"\n\n--- Active Mode: {agent_name} ---\n{ctx}"
+    return base
+
 # ─── Database ─────────────────────────────────────────────────────────────────
 
 def get_db():
@@ -432,19 +505,36 @@ async def onboard(req: OnboardRequest, request: Request):
     db.close()
     return {"ok": True}
 
-# ─── Apps API ─────────────────────────────────────────────────────────────────
+# ─── Apps & Agents API ───────────────────────────────────────────────────────
 
 @app.get("/api/apps")
 async def get_apps():
     return load_apps()
 
+@app.get("/api/agents")
+async def get_agents():
+    agents = load_agents()
+    result = []
+    for name, content in sorted(agents.items()):
+        lines = [l for l in content.splitlines() if l.strip()]
+        description = ""
+        for line in lines:
+            stripped = line.lstrip("#").strip()
+            if stripped and not stripped.startswith("---") and len(stripped) > 10:
+                description = stripped
+                break
+        result.append({"name": name, "description": description})
+    return result
+
 @app.get("/api/status")
 async def status():
+    agents = load_agents()
     return {
         "backend": "anthropic" if USE_ANTHROPIC else "ollama",
         "model": CLAUDE_MODEL,
         "instance": INSTANCE_NAME,
-        "version": "0.4.0",
+        "version": "0.5.0",
+        "agents_loaded": len(agents),
     }
 
 @app.get("/api/health")
@@ -475,6 +565,8 @@ async def chat_ws(websocket: WebSocket):
             if onboarding_complete:
                 onboarding = json.loads(user_row["onboarding_data"] or "{}")
                 soul = build_soul(user_name, onboarding)
+            else:
+                onboarding = {}
             # Load most recent session
             session = db.execute(
                 "SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
@@ -520,21 +612,32 @@ async def chat_ws(websocket: WebSocket):
                     history.pop()
                     continue
 
-            await websocket.send_json({"type": "start"})
+            # Agent routing — pick the best agent for this message
+            active_agent = route_agent(user_msg)
+            onboarding_data = {}
+            if user_data:
+                db = get_db()
+                row = db.execute("SELECT onboarding_data FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+                db.close()
+                if row:
+                    onboarding_data = json.loads(row["onboarding_data"] or "{}")
+            active_soul = build_soul_with_agent(user_name, onboarding_data, active_agent)
+
+            await websocket.send_json({"type": "start", "agent": active_agent})
 
             try:
                 context = history[-30:]
                 if USE_ANTHROPIC:
-                    full_response, input_tok, output_tok = await stream_anthropic(context, soul, websocket)
+                    full_response, input_tok, output_tok = await stream_anthropic(context, active_soul, websocket)
                 else:
-                    full_response, input_tok, output_tok = await stream_ollama(context, soul, websocket)
+                    full_response, input_tok, output_tok = await stream_ollama(context, active_soul, websocket)
             except Exception as e:
                 await websocket.send_json({"type": "error", "content": f"AI error: {e}"})
                 history.pop()
                 continue
 
             history.append({"role": "assistant", "content": full_response})
-            await websocket.send_json({"type": "done"})
+            await websocket.send_json({"type": "done", "agent": active_agent})
 
             if user_data:
                 db = get_db()
