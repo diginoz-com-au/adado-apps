@@ -761,6 +761,15 @@ let token = localStorage.getItem('adado_token');
 let userName = localStorage.getItem('adado_name');
 let _appsCache = [];
 
+// Per-app agent WS pool: slug -> WebSocket
+const appWS = {};
+function activeWS() {
+  if (activeThread === 'general') return ws;
+  const aw = appWS[activeThread];
+  if (aw && aw.readyState === WebSocket.OPEN) return aw;
+  return ws; // fallback to general if app WS not ready yet
+}
+
 // ─── Thread state ─────────────────────────────────────────────────────────────
 const threads = { general: [] };
 const threadMeta = {
@@ -838,6 +847,15 @@ function switchThread(key) {
   if (target) target.classList.add('active');
 
   activeThread = key;
+
+  // Spin up dedicated WS for app threads that have an agentId
+  if (key !== 'general') {
+    const meta = threadMeta[key] || {};
+    const existing = appWS[key];
+    if (!existing || existing.readyState > 1) {
+      createAppWS(key, meta.agentId || null);
+    }
+  }
 
   // Restore messages (or welcome screen)
   restoreMessages(threads[key], key);
@@ -978,64 +996,84 @@ async function toggleUsage() {
 }
 
 // ─── WebSocket ───────────────────────────────────────────────────────────────
+// Shared WS message handler — general and per-app WS both call this
+function handleWSMsg(msg, isGeneral) {
+  if (msg.type === 'ready') {
+    if (isGeneral && token && msg.onboarding_complete === false) {
+      showOnboarding();
+    }
+    return;
+  }
+  if (msg.type === 'start') {
+    streaming = true;
+    streamBubble = addBubble('ada', '');
+    document.getElementById('send-btn').disabled = true;
+  } else if (msg.type === 'chunk') {
+    if (streamBubble) {
+      streamBubble.textContent += msg.content;
+      scrollBottom();
+    }
+  } else if (msg.type === 'done') {
+    streaming = false;
+    finaliseAdaBubble(streamBubble);
+    streamBubble = null;
+    document.getElementById('send-btn').disabled = false;
+  } else if (msg.type === 'error') {
+    addBubble('ada', '⚠️ ' + msg.content);
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const params = token ? `?token=${token}` : '';
   ws = new WebSocket(`${proto}://${location.host}/ws/chat${params}`);
 
   ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'ready') {
-      if (token && msg.onboarding_complete === false) {
-        showOnboarding();
-      }
-      return;
-    }
-    if (msg.type === 'start') {
-      streaming = true;
-      streamBubble = addBubble('ada', '');
-      document.getElementById('send-btn').disabled = true;
-    } else if (msg.type === 'chunk') {
-      if (streamBubble) {
-        streamBubble.textContent += msg.content;
-        scrollBottom();
-      }
-    } else if (msg.type === 'done') {
-      streaming = false;
-      finaliseAdaBubble(streamBubble);
-      streamBubble = null;
-      document.getElementById('send-btn').disabled = false;
-    } else if (msg.type === 'error') {
-      addBubble('ada', '⚠️ ' + msg.content);
-      document.getElementById('send-btn').disabled = false;
-    }
+    // Only handle messages for the general thread
+    if (activeThread !== 'general') return;
+    handleWSMsg(JSON.parse(e.data), true);
   };
 
-  ws.onclose = () => {
-    setTimeout(connectWS, 2000);
+  ws.onclose = () => { setTimeout(connectWS, 2000); };
+}
+
+// Create (or reconnect) a per-app WS for a given slug + agentId
+function createAppWS(slug, agentId) {
+  if (appWS[slug] && appWS[slug].readyState < 2) {
+    try { appWS[slug].close(); } catch(e) {}
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const parts = [];
+  if (token) parts.push(`token=${encodeURIComponent(token)}`);
+  if (agentId) parts.push(`agent=${encodeURIComponent(agentId)}`);
+  const url = `${proto}://${location.host}/ws/chat${parts.length ? '?' + parts.join('&') : ''}`;
+
+  const aw = new WebSocket(url);
+  aw.onmessage = (e) => {
+    if (activeThread !== slug) return;
+    handleWSMsg(JSON.parse(e.data), false);
   };
+  aw.onclose = () => {
+    if (activeThread === slug) setTimeout(() => createAppWS(slug, agentId), 2000);
+  };
+  appWS[slug] = aw;
+  return aw;
 }
 
 // ─── Messaging ───────────────────────────────────────────────────────────────
 function sendMessage() {
   const input = document.getElementById('input');
   const text = input.value.trim();
-  if (!text || streaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const aw = activeWS();
+  if (!text || streaming || !aw || aw.readyState !== WebSocket.OPEN) return;
 
   hideWelcome();
   addBubble('user', text);
   input.value = '';
   autoResize(input);
 
-  // Prepend app context on first message in a non-general thread
-  let payload = text;
-  if (!threadFirstSent.has(activeThread)) {
-    const meta = threadMeta[activeThread] || {};
-    payload = `[App: ${meta.name || activeThread}] ${text}`;
-    threadFirstSent.add(activeThread);
-  }
-
-  ws.send(JSON.stringify({ content: payload }));
+  aw.send(JSON.stringify({ content: text }));
 }
 
 // ─── Voice input ──────────────────────────────────────────────────────────────
@@ -1212,8 +1250,9 @@ function addAppToSidebar(app) {
   threadMeta[slug] = {
     name: app.name,
     icon: emoji,
-    placeholder: `Ask Ada about ${app.name}…`,
-    slug
+    placeholder: `Ask ${app.name} agent…`,
+    slug,
+    agentId: (app.agent && app.agent.id) || null,
   };
 
   const list = document.getElementById('app-chat-list');
@@ -1334,6 +1373,8 @@ function signOut() {
   localStorage.removeItem('adado_name');
   updateAuthUI();
   connectWS();
+  // Close all per-app WS connections
+  Object.keys(appWS).forEach(k => { try { appWS[k].close(); } catch(e) {} delete appWS[k]; });
 }
 
 function escapeHtml(s) {

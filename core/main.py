@@ -168,6 +168,38 @@ def build_soul_with_agent(name: str, onboarding: dict, agent_name: str) -> str:
         return base + f"\n\n--- Active Mode: {agent_name} ---\n{ctx}"
     return base
 
+# ─── Per-app pinned agent support ─────────────────────────────────────────────
+
+def load_agent_by_id(agent_id: str) -> str:
+    """Return agent markdown content, tolerating -agent suffix conventions."""
+    agents = load_agents()
+    if agent_id in agents:
+        return agents[agent_id]
+    base = agent_id.replace("-agent", "").replace("_agent", "")
+    return agents.get(base, "")
+
+def build_pinned_agent_soul(name: str, onboarding: dict, agent_id: str) -> str:
+    """Build a soul that IS the specified app agent — not just augmented with it."""
+    base = build_soul(name, onboarding)
+    content = load_agent_by_id(agent_id)
+    if not content:
+        return base
+    lines = content.strip().splitlines()
+    if lines and lines[0] == "---":
+        try:
+            end = lines.index("---", 1)
+            lines = lines[end + 1:]
+        except ValueError:
+            pass
+    agent_text = "\n".join(lines).strip()
+    return (
+        base
+        + f"\n\n## You are the {agent_id} specialist agent.\n"
+        + "You are operating in a dedicated single-app context. Stay focused on this "
+        + "app's domain. Do not route to other agents.\n\n"
+        + agent_text
+    )
+
 # ─── Database ─────────────────────────────────────────────────────────────────
 
 def get_db():
@@ -573,6 +605,18 @@ async def onboard(req: OnboardRequest, request: Request):
 async def get_apps():
     return load_apps()
 
+@app.get("/api/apps/{app_id}")
+async def get_app(app_id: str):
+    for app in load_apps(include_core=True):
+        if app.get("id") == app_id or app.get("slug") == app_id:
+            return app
+    raise HTTPException(404, "App not found")
+
+@app.get("/api/apps/registry/all")
+async def get_app_registry():
+    """Returns all apps including agent metadata for the frontend registry."""
+    return load_apps(include_core=True)
+
 @app.get("/api/agents")
 async def get_agents():
     agents = load_agents()
@@ -667,12 +711,20 @@ async def chat_ws(websocket: WebSocket):
                 history = json.loads(session["messages"])[-40:]
     db.close()
 
+    # Per-app mode: if ?agent= param is present, pin the soul to that agent
+    requested_agent = websocket.query_params.get("agent", "").strip()
+    is_pinned_agent  = bool(requested_agent)
+    if is_pinned_agent and onboarding_complete and user_row_cache:
+        _ob_data = json.loads(user_row_cache["onboarding_data"] or "{}")
+        soul = build_pinned_agent_soul(user_name, _ob_data, requested_agent)
+
     await websocket.send_json({
         "type":  "ready",
         "name":  user_name,
         "model": active_model,
         "user":  user_name,
         "onboarding_complete": onboarding_complete,
+        "agent": requested_agent if is_pinned_agent else None,
     })
 
     try:
@@ -704,16 +756,20 @@ async def chat_ws(websocket: WebSocket):
                     history.pop()
                     continue
 
-            # Agent routing — pick the best agent for this message
-            active_agent = route_agent(user_msg)
-            onboarding_data = {}
-            if user_data:
-                db = get_db()
-                row = db.execute("SELECT onboarding_data FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
-                db.close()
-                if row:
-                    onboarding_data = json.loads(row["onboarding_data"] or "{}")
-            active_soul = build_soul_with_agent(user_name, onboarding_data, active_agent)
+            # Agent routing: pinned app-agent takes priority over keyword routing
+            if is_pinned_agent:
+                active_agent = requested_agent
+                active_soul  = soul  # already built with pinned agent context
+            else:
+                active_agent = route_agent(user_msg)
+                onboarding_data = {}
+                if user_data:
+                    db = get_db()
+                    row = db.execute("SELECT onboarding_data FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+                    db.close()
+                    if row:
+                        onboarding_data = json.loads(row["onboarding_data"] or "{}")
+                active_soul = build_soul_with_agent(user_name, onboarding_data, active_agent)
 
             await websocket.send_json({"type": "start", "agent": active_agent})
 
