@@ -1,0 +1,17 @@
+id: slack
+name: Slack
+description: Let Ada monitor your Slack channels, surface what matters, and draft responses without you context-switching all day.
+short_description: Stay on top of Slack without living in it
+category: communication
+icon: 💬
+tier: 2
+coming_soon: true
+market_leader: "Slack"
+agent:
+  id: slack-agent
+  description: Monitors channels, summarises threads, flags mentions, and drafts replies
+  capabilities:
+    - Summarise what you missed in a channel
+    - Flag messages that need your reply
+    - Draft responses to threads
+    - Set status and snooze notifications via Ada

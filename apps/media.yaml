@@ -2,6 +2,7 @@ id: adado-media
 chat_endpoint: /ws/chat?agent=media-agent
 name: AdaDo Media
 description: Let Ada browse and control your media in Jellyfin — stream movies, TV, and music from your own server.
+short_description: "Stream your own movies & music"
 category: media server
 market_leader: "Jellyfin"
 homepage_tile: true

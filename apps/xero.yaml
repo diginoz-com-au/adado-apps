@@ -1,0 +1,17 @@
+id: xero
+name: Xero
+description: Let Ada track invoices, flag overdue payments, and give you a real-time picture of your business cash flow in Xero.
+short_description: Business finances without the spreadsheets
+category: finance
+icon: 🧾
+tier: 2
+coming_soon: true
+market_leader: "Xero"
+agent:
+  id: xero-agent
+  description: Tracks invoices, expenses, and cash flow — alerts you to what needs attention
+  capabilities:
+    - Show outstanding invoices and who owes you
+    - Flag overdue payments and draft follow-up emails
+    - Summarise monthly profit/loss in plain English
+    - Categorise expenses automatically

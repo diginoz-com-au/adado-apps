@@ -2,6 +2,7 @@ id: adado-automation
 chat_endpoint: /ws/chat?agent=automation-agent
 name: AdaDo Automation
 description: Let Ada build and trigger n8n workflows — the open-source automation platform that connects anything to anything.
+short_description: "Build n8n workflows to automate anything"
 category: workflow automation
 market_leader: "n8n"
 homepage_tile: true

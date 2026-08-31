@@ -2,6 +2,7 @@ id: adado-ai
 chat_endpoint: /ws/chat?agent=ai-agent
 name: AdaDo AI Studio
 description: Let Ada query any local or cloud LLM through Open WebUI — the open-source AI interface.
+short_description: "Chat with any AI model, local or cloud"
 category: AI workflow engine
 market_leader: "Open WebUI"
 homepage_tile: true

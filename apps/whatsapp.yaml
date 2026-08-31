@@ -1,0 +1,16 @@
+id: whatsapp
+name: WhatsApp
+description: Let Ada draft and send WhatsApp messages, summarise group chats, and make sure you never leave someone hanging.
+short_description: Messages sent, not delayed
+category: communication
+icon: 💬
+tier: 2
+coming_soon: true
+agent:
+  id: whatsapp-agent
+  description: Drafts messages, summarises group chats, and sends WhatsApp messages on your behalf
+  capabilities:
+    - Draft and send messages in your voice
+    - Summarise group chat activity while you were away
+    - Flag messages that need a reply
+    - Schedule messages for later

@@ -11,12 +11,15 @@ RUN pip install --no-cache-dir \
     bcrypt \
     croniter \
     python-multipart \
-    stripe
+    stripe \
+    cryptography
 
 # Copy core files
 COPY main.py .
 COPY memory.py .
 COPY agent_loop.py .
+COPY api_router.py .
+COPY token_integration.py .
 COPY tools/ ./tools/
 COPY static/ ./static/
 

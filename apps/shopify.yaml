@@ -1,0 +1,16 @@
+id: shopify
+name: Shopify
+description: Let Ada monitor your store, flag low stock, draft product descriptions, and give you a daily sales summary without logging into Shopify.
+short_description: Your store, managed for you
+category: ecommerce
+icon: 🛒
+tier: 2
+coming_soon: true
+agent:
+  id: shopify-agent
+  description: Monitors orders, inventory, and sales — flags what needs action and handles routine store tasks
+  capabilities:
+    - Daily sales and revenue summary
+    - Low stock alerts and reorder suggestions
+    - Draft product descriptions from bullet points
+    - Respond to customer queries on your behalf

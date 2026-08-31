@@ -2,6 +2,7 @@ id: adado-docs
 chat_endpoint: /ws/chat?agent=docs-agent
 name: AdaDo Docs
 description: Let Ada scan, archive, and search your documents in Paperless-ngx — receipts, contracts, and letters, fully searchable.
+short_description: "Scan, archive & search all your documents"
 category: document archive
 market_leader: "Paperless-ngx"
 homepage_tile: true

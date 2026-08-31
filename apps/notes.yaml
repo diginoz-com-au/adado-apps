@@ -2,6 +2,7 @@ id: adado-notes
 chat_endpoint: /ws/chat?agent=notes-agent
 name: Notes
 description: Let Ada create, link, and search notes in Obsidian — the local-first knowledge tool trusted by millions.
+short_description: "Local-first notes & knowledge base"
 category: productivity
 market_leader: "Obsidian"
 homepage_tile: true

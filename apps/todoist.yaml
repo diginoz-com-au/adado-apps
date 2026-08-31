@@ -1,0 +1,16 @@
+id: todoist
+name: Todoist
+description: Let Ada manage your task list in Todoist — capture tasks from conversation, reschedule overdue items, and keep your priorities straight.
+short_description: Tasks handled, not forgotten
+category: productivity
+icon: ✅
+tier: 2
+coming_soon: true
+agent:
+  id: todoist-agent
+  description: Captures, prioritises, and reschedules tasks in Todoist based on your conversations with Ada
+  capabilities:
+    - Add tasks from conversation without opening Todoist
+    - Reschedule overdue tasks and suggest priorities
+    - Give you a daily task briefing
+    - Mark tasks complete by voice or chat

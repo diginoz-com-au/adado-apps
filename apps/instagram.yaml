@@ -1,0 +1,16 @@
+id: instagram
+name: Instagram
+description: Let Ada schedule posts, reply to comments, and keep your Instagram presence active without you opening the app every hour.
+short_description: Your Instagram, running on autopilot
+category: social
+icon: 📸
+tier: 2
+coming_soon: true
+agent:
+  id: instagram-agent
+  description: Schedules posts, drafts captions, replies to comments, and tracks engagement on Instagram
+  capabilities:
+    - Draft captions and hashtags from a brief description
+    - Schedule posts in advance
+    - Reply to comments in your voice
+    - Summarise engagement and follower growth

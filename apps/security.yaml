@@ -2,6 +2,7 @@ id: adado-security
 chat_endpoint: /ws/chat?agent=security-agent
 name: Security Centre
 description: Let Ada query threat intelligence and manage security alerts via CrowdSec — crowd-sourced intrusion detection.
+short_description: "Threat intel & intrusion detection"
 category: security
 market_leader: "CrowdSec"
 homepage_tile: true

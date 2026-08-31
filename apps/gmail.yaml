@@ -1,0 +1,17 @@
+id: gmail
+name: Gmail
+description: Let Ada read, triage, and draft replies in your Gmail inbox — no more email overwhelm.
+short_description: Inbox zero, handled by Ada
+category: communication
+icon: 📨
+tier: 2
+coming_soon: true
+market_leader: "Gmail"
+agent:
+  id: gmail-agent
+  description: Triages Gmail, drafts replies, flags urgent emails, and sends on your behalf
+  capabilities:
+    - Summarise unread emails and flag urgent ones
+    - Draft replies in your voice
+    - Unsubscribe from newsletters automatically
+    - Search your inbox by topic, sender, or date

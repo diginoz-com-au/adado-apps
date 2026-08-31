@@ -1,0 +1,16 @@
+id: google-drive
+name: Google Drive
+description: Let Ada find, summarise, and create documents in your Google Drive — stop hunting through folders.
+short_description: Files found, not searched for
+category: productivity
+icon: 📁
+tier: 2
+coming_soon: true
+agent:
+  id: google-drive-agent
+  description: Searches, reads, and creates files in Google Drive on your behalf
+  capabilities:
+    - Find documents by topic or keyword
+    - Summarise long documents in plain English
+    - Create new Docs and Sheets from conversation
+    - Share files with people automatically
