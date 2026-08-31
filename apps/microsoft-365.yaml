@@ -1,0 +1,16 @@
+id: microsoft-365
+name: Microsoft 365
+description: Let Ada manage your Outlook inbox, Teams messages, and OneDrive files — one place, no switching apps.
+short_description: Outlook, Teams, OneDrive — handled
+category: productivity
+icon: 🪟
+tier: 2
+coming_soon: true
+agent:
+  id: microsoft-365-agent
+  description: Manages Outlook email, Teams messages, and OneDrive documents on your behalf
+  capabilities:
+    - Triage Outlook inbox and draft replies
+    - Summarise Teams channel activity
+    - Find and share OneDrive files
+    - Schedule meetings via Outlook Calendar

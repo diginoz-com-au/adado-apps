@@ -1,0 +1,16 @@
+id: notion
+name: Notion
+description: Let Ada keep your Notion workspace organised — capture notes, update databases, and surface what you need without digging through pages.
+short_description: Your second brain, actually organised
+category: productivity
+icon: 📝
+tier: 2
+coming_soon: true
+agent:
+  id: notion-agent
+  description: Creates notes, updates databases, and retrieves information from your Notion workspace
+  capabilities:
+    - Capture ideas and create pages by voice or chat
+    - Update database records and task lists
+    - Search and retrieve documents
+    - Summarise project notes on demand

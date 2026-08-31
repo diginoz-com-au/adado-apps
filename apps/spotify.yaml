@@ -1,0 +1,16 @@
+id: spotify
+name: Spotify
+description: Let Ada control your music — create playlists by mood, skip to the right song, and manage Spotify by voice without touching the app.
+short_description: Music on demand, no fiddling
+category: lifestyle
+icon: 🎵
+tier: 2
+coming_soon: true
+agent:
+  id: spotify-agent
+  description: Controls playback, creates playlists, and searches your library on command
+  capabilities:
+    - Play, pause, skip, and control volume by voice or chat
+    - Create playlists by mood or activity
+    - Find songs and artists on demand
+    - Queue up music for a specific session (focus, workout, wind-down)

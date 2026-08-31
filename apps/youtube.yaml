@@ -1,0 +1,16 @@
+id: youtube
+name: YouTube
+description: Let Ada monitor your channel, summarise comments, draft video descriptions, and help you grow without the manual grind.
+short_description: Your channel, growing without the grind
+category: social
+icon: 🎬
+tier: 2
+coming_soon: true
+agent:
+  id: youtube-agent
+  description: Monitors channel stats, summarises comments, and helps with titles, descriptions, and community posts
+  capabilities:
+    - Summarise comments and surface common questions
+    - Draft video titles and descriptions from notes
+    - Track watch time and subscriber trends
+    - Reply to comments in your voice

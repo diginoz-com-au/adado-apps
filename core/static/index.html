@@ -10,11 +10,16 @@
 <meta property="og:description" content="Say what needs doing. Ada handles it. No prompts. No dashboards. No learning curve. 29 languages. Voice and text.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://adadoai.com">
-<meta property="og:image" content="https://adadoai.com/static/logo.svg">
+<meta property="og:image" content="https://adadoai.com/static/icon-512.png">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="AdaDo — AI assistant that just does it">
 <meta name="twitter:description" content="Say what needs doing. Ada handles it. Powered by Anthropic Claude.">
-<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<meta name="twitter:image" content="https://adadoai.com/static/icon-512.png">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
 <link rel="manifest" href="/static/manifest.json">
 <script src="https://js.stripe.com/v3/" async></script>
 <style>
@@ -455,9 +460,9 @@
     border: 1px solid var(--border);
     border-radius: 20px;
     padding: 1.5rem;
-    width: 560px;
+    width: 680px;
     max-width: 95vw;
-    max-height: 85vh;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
   }
@@ -465,22 +470,22 @@
   .modal-header h2 { font-size: 1.2rem; font-weight: 800; }
   .modal-body { overflow-y: auto; flex: 1; }
   .lib-tiles {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 0.45rem; padding-bottom: 0.5rem;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.5rem; padding-bottom: 0.5rem;
   }
   .lib-tile {
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 12px; padding: 0.75rem 0.5rem; cursor: pointer;
+    border-radius: 12px; padding: 0.85rem 0.7rem; cursor: pointer;
     transition: all 0.15s; display: flex; flex-direction: column;
-    align-items: center; gap: 0.3rem; text-align: center;
+    align-items: flex-start; gap: 0.25rem; text-align: left;
   }
   .lib-tile:hover { border-color: var(--accent); background: rgba(110,91,240,0.08); }
   .lib-tile.enabled { border-color: var(--accent); background: rgba(110,91,240,0.12); cursor: default; }
-  .lib-tile .lt-icon { font-size: 1.4rem; }
-  .lib-tile .lt-name { font-size: 0.78rem; color: var(--muted); }
-  .lib-tile.enabled .lt-name { color: var(--text); }
-  .lib-tile .lt-action { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
-  .lib-tile.coming-soon { opacity: 0.5; cursor: default; }
+  .lib-tile .lt-icon { font-size: 1.4rem; margin-bottom: 0.15rem; }
+  .lib-tile .lt-name { font-size: 0.82rem; font-weight: 600; color: var(--text); line-height: 1.2; }
+  .lib-tile .lt-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.35; margin-top: 0.1rem; }
+  .lib-tile .lt-action { font-size: 0.68rem; color: var(--accent); font-weight: 600; margin-top: auto; padding-top: 0.4rem; }
+  .lib-tile.coming-soon { opacity: 0.55; cursor: default; }
   .lib-tile.coming-soon:hover { border-color: var(--border); background: var(--surface2); }
   .lib-tile.coming-soon .lt-action { color: var(--muted); }
 
@@ -1365,6 +1370,23 @@ function renderWelcome() {
 }
 
 // ─── Agent switching ─────────────────────────────────────────────────────────
+const _AGENT_PROMPTS = {
+  'adado-finance':   ["What's my budget looking like?", "Any bills due soon?", "Summarise my spending this month", "Track a new expense"],
+  'adado-email':     ["Check my inbox for anything urgent", "Draft a reply to the last email", "Unsubscribe from newsletters", "Who hasn't replied to me?"],
+  'adado-projects':  ["What's on my plate today?", "Add a task", "What's overdue?", "Summarise my week"],
+  'adado-calendar':  ["What have I got on tomorrow?", "Block some focus time", "When's my next meeting?", "Schedule a catch-up"],
+  'adado-health':    ["Log today's workout", "How am I tracking this week?", "Remind me to drink water", "What's my step average?"],
+  'adado-social':    ["Draft a post for today", "What should I post about?", "Schedule this week's content", "Check my engagement"],
+  'adado-notes':     ["Create a new note", "Find my notes on…", "Summarise what I've been working on", "Start a meeting notes template"],
+  'adado-files':     ["Find a file for me", "What did I work on last week?", "Organise my downloads folder", "Share a file with someone"],
+  'adado-writing':   ["Help me write something", "Edit this paragraph", "Give me a headline for…", "Write a first draft of…"],
+  'adado-trading':   ["How's my portfolio doing?", "Any alerts I should know about?", "What's the market doing today?", "Set a price alert"],
+  'adado-crm':       ["Who do I need to follow up with?", "Add a new contact", "What's the status of my pipeline?", "Log a call with…"],
+  'adado-browser':   ["Search for…", "Summarise this page", "Find the best option for…", "Open and read…"],
+  'adado-shopping':  ["Find the best price for…", "Track a deal", "What's on my wishlist?", "Compare these products"],
+  'adado-backup':    ["What was last backed up?", "Run a backup now", "Show me what's protected", "Verify my backups"],
+};
+
 function switchAgent(slug, name, icon, agentId) {
   activeAgent = agentId || (slug + '-agent');
 
@@ -1373,12 +1395,19 @@ function switchAgent(slug, name, icon, agentId) {
     createAgentWS(activeAgent);
   }
 
-  // Clear messages, show agent welcome
+  const prompts = _AGENT_PROMPTS[slug] || _AGENT_PROMPTS[agentId] || [
+    `What can ${name} do?`, `Get started with ${name}`, `Help me with ${name}`
+  ];
+  const promptsHTML = prompts.map(p =>
+    `<span class="suggestion" onclick="sendSuggestion(this)">${escapeHtml(p)}</span>`
+  ).join('');
+
   const msgs = document.getElementById('messages');
   msgs.innerHTML = `<div class="welcome" id="welcome">
     <div class="welcome-icon"><span style="font-size:3.5rem">${icon}</span></div>
     <h2>${escapeHtml(name)}</h2>
-    <p>Ada's ${escapeHtml(name)} agent is ready. Ask anything about ${escapeHtml(name)}.</p>
+    <p style="color:var(--muted);font-size:0.9rem;margin-bottom:1rem">What do you need from ${escapeHtml(name)} today?</p>
+    <div class="suggestions">${promptsHTML}</div>
   </div>`;
 
   updateAppTabs();
@@ -1771,8 +1800,11 @@ function openAppLibrary() {
     const isSoon  = !!app.coming_soon;
     const tile    = document.createElement('div');
     tile.className = `lib-tile${isAdded ? ' enabled' : ''}${isSoon ? ' coming-soon' : ''}`;
+    const desc = app.short_description || app.description || '';
+    const descHtml = desc ? `<span class="lt-desc">${escapeHtml(desc.length > 60 ? desc.slice(0, 58) + '…' : desc)}</span>` : '';
     tile.innerHTML = `<span class="lt-icon">${emoji}</span>
       <span class="lt-name">${escapeHtml(app.name)}</span>
+      ${descHtml}
       <span class="lt-action">${isAdded ? '✓ Added' : isSoon ? 'Coming soon' : '+ Add'}</span>`;
     if (!isAdded && !isSoon) {
       tile.onclick = () => {
@@ -1784,12 +1816,40 @@ function openAppLibrary() {
         const agentId = app.agent?.id || slug + '-agent';
         switchAgent(slug, app.name, emoji, agentId);
       };
+    } else if (isSoon) {
+      tile.onclick = () => showToast(`${emoji} ${app.name} is coming soon — we'll let you know when it's ready.`);
     }
     tilesEl.appendChild(tile);
   }
 
-  if (tier1.length) { addLabel('✦ Built by AdaDo'); tier1.forEach(addTile); }
-  if (tier2.length) { addLabel('★ Recommended'); tier2.forEach(addTile); }
+  if (tier1.length) { addLabel('✦ Built by AdaDo — available now'); tier1.forEach(addTile); }
+  if (tier2.length) {
+    addLabel('★ Integrations — connect your apps');
+    const _CAT_ORDER = ['communication','productivity','finance','developer','social','ecommerce','lifestyle'];
+    const _CAT_LABELS = {
+      communication: '💬 Communication',
+      productivity:  '⚡ Productivity',
+      finance:       '💰 Finance',
+      developer:     '🛠 Developer',
+      social:        '📱 Social',
+      ecommerce:     '🛒 Commerce',
+      lifestyle:     '🎵 Lifestyle',
+    };
+    const byCategory = {};
+    tier2.forEach(a => {
+      const cat = a.category || 'other';
+      (byCategory[cat] = byCategory[cat] || []).push(a);
+    });
+    const catOrder = [..._CAT_ORDER, ...Object.keys(byCategory).filter(c => !_CAT_ORDER.includes(c))];
+    catOrder.forEach(cat => {
+      if (!byCategory[cat]) return;
+      const catEl = document.createElement('div');
+      catEl.style.cssText = 'grid-column:1/-1;font-size:0.65rem;font-weight:600;color:var(--muted);margin-top:0.35rem;letter-spacing:0.06em;';
+      catEl.textContent = _CAT_LABELS[cat] || cat;
+      tilesEl.appendChild(catEl);
+      byCategory[cat].forEach(addTile);
+    });
+  }
 
   addLabel('⟨/⟩ GitHub Direct');
   const warn = document.createElement('div');
@@ -1917,6 +1977,21 @@ function signOut() {
   updateAuthUI();
   connectWS();
   renderWelcome();
+}
+
+function showToast(msg, duration = 3500) {
+  let wrap = document.getElementById('toast-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'toast-wrap';
+    wrap.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:0.4rem;align-items:center;pointer-events:none;';
+    document.body.appendChild(wrap);
+  }
+  const t = document.createElement('div');
+  t.style.cssText = 'background:#1c1929;border:1px solid #2a2640;color:#e8e6f0;padding:0.6rem 1.2rem;border-radius:999px;font-size:0.82rem;box-shadow:0 8px 24px rgba(0,0,0,0.5);animation:fadeIn 0.2s ease;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;';
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 310); }, duration);
 }
 
 function escapeHtml(s) {

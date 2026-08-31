@@ -1,0 +1,16 @@
+id: github
+name: GitHub
+description: Let Ada monitor your repos, summarise pull requests, triage issues, and keep your team moving without you living in GitHub.
+short_description: Code reviews and issues, summarised for you
+category: developer
+icon: 🐙
+tier: 2
+coming_soon: true
+agent:
+  id: github-agent
+  description: Monitors repos, summarises PRs, triages issues, and notifies you of what needs attention
+  capabilities:
+    - Summarise open pull requests waiting for your review
+    - Triage new issues and label them automatically
+    - Notify you when CI fails on your branch
+    - Generate release notes from merged PRs

@@ -1,0 +1,16 @@
+id: apple-calendar
+name: Apple Calendar
+description: Let Ada manage your Apple Calendar — schedule, reschedule, and brief you on what's coming up, right from Ada chat.
+short_description: iCloud Calendar, managed by Ada
+category: productivity
+icon: 📆
+tier: 2
+coming_soon: true
+agent:
+  id: apple-calendar-agent
+  description: Creates, moves, and reads events in your Apple Calendar via iCloud integration
+  capabilities:
+    - Book and reschedule events by voice or chat
+    - Give you a daily briefing on upcoming events
+    - Block time for focus, gym, or personal commitments
+    - Send meeting invites to contacts

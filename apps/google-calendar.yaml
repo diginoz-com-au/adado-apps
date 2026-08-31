@@ -1,0 +1,17 @@
+id: google-calendar
+name: Google Calendar
+description: Let Ada manage your Google Calendar — schedule, reschedule, and protect your time automatically.
+short_description: Your schedule, managed for you
+category: productivity
+icon: 📅
+tier: 2
+coming_soon: true
+market_leader: "Google Calendar"
+agent:
+  id: google-calendar-agent
+  description: Books meetings, blocks focus time, reschedules conflicts, and keeps your calendar sane
+  capabilities:
+    - Book meetings and send invites
+    - Reschedule conflicting events
+    - Block focus time automatically
+    - Give you a daily schedule briefing
