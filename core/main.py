@@ -584,6 +584,13 @@ async def startup():
         init_memory_schema(DB_PATH)
     except Exception as e:
         print(f"Warning: memory schema init failed: {e}")
+    # Initialise API router (pool + quota schema)
+    try:
+        from api_router import init_router
+        init_router(DB_PATH)
+        print("API router initialised")
+    except Exception as e:
+        print(f"Warning: api_router init failed: {e}")
     # Start reminder scheduler
     _start_reminder_scheduler()
 
@@ -1164,18 +1171,26 @@ async def chat_ws(websocket: WebSocket):
         "tools_enabled": USE_ANTHROPIC,
     })
 
-    # Build Anthropic client (reused per session)
+    # Build Anthropic client via API router (pool + BYOK + quota)
     ant_client = None
+    _router_account_id = None  # tracks which pool account is active this session
     if USE_ANTHROPIC:
-        proxy = CLAUDE_PROXY_URL or (
-            "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
-        )
-        if proxy:
-            ant_client = ant_lib.AsyncAnthropic(api_key="proxy", base_url=proxy)
-        elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
-            ant_client = ant_lib.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
-        else:
-            ant_client = ant_lib.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        try:
+            from api_router import get_client_with_retry, QuotaExceededError, NoAccountAvailableError
+            _router_available = True
+        except ImportError:
+            _router_available = False
+        if not _router_available:
+            # Fallback: direct key from env
+            proxy = CLAUDE_PROXY_URL or (
+                "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+            )
+            if proxy:
+                ant_client = ant_lib.AsyncAnthropic(api_key="proxy", base_url=proxy)
+            elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+                ant_client = ant_lib.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+            else:
+                ant_client = ant_lib.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
     user_context = {
         "tier": user_row_cache["tier"] if user_row_cache else "cloud",
@@ -1249,18 +1264,51 @@ async def chat_ws(websocket: WebSocket):
                 async def _send(msg):
                     await websocket.send_json(msg)
 
-                if USE_ANTHROPIC and ant_client:
+                if USE_ANTHROPIC:
                     from agent_loop import run_agent_loop
+                    # Route via API router (BYOK / pool / quota)
+                    _effective_client = ant_client  # fallback if router unavailable
+                    if _router_available and uid:
+                        try:
+                            from api_router import get_client_with_retry, QuotaExceededError, NoAccountAvailableError, record_usage
+                            route = await get_client_with_retry(
+                                user_id=uid,
+                                estimated_tokens=1500,
+                                max_wait=30.0,
+                                send_fn=_send,
+                            )
+                            _effective_client = route.client
+                            _router_account_id = route.account_id
+                            if route.quota_warn:
+                                await websocket.send_json({
+                                    "type": "system",
+                                    "message": f"⚠ You've used {route.quota_pct:.0f}% of today's token quota."
+                                })
+                        except QuotaExceededError as qe:
+                            await websocket.send_json({"type": "error", "content": str(qe)})
+                            history.pop()
+                            continue
+                        except NoAccountAvailableError:
+                            await websocket.send_json({"type": "error", "content": "Ada is very busy right now. Please try again in a moment."})
+                            history.pop()
+                            continue
+
                     full_response, input_tok, output_tok = await run_agent_loop(
                         messages=context,
                         soul=active_soul,
                         model=active_model,
-                        client=ant_client,
+                        client=_effective_client,
                         user_id=uid or 0,
                         user_context=user_context,
                         send_fn=_send,
                         tools_enabled=True,
                     )
+                    # Record usage against pool account + user quota
+                    if _router_available and uid and input_tok:
+                        try:
+                            record_usage(_router_account_id, uid, input_tok, output_tok)
+                        except Exception:
+                            pass
                 else:
                     from agent_loop import run_agent_loop_ollama
                     full_response, input_tok, output_tok = await run_agent_loop_ollama(
@@ -2050,6 +2098,107 @@ async def set_burn_limits(req: BurnLimitRequest, request: Request):
     db.commit()
     db.close()
     return {"ok": True, "daily_limit_usd": req.daily_limit_usd, "monthly_limit_usd": req.monthly_limit_usd}
+
+# ─── API Router: BYOK + Quota endpoints ──────────────────────────────────────
+
+@app.get("/api/usage/quota")
+async def get_quota(request: Request):
+    """Return current user's token quota and usage."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    try:
+        from api_router import get_user_quota_status, get_user_byok
+        quota = get_user_quota_status(user_data["sub"])
+        has_byok = get_user_byok(user_data["sub"]) is not None
+        return {**quota, "has_byok": has_byok}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/settings/byok")
+async def set_byok(request: Request):
+    """Store user's own Anthropic API key (BYOK)."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    api_key = (body.get("api_key") or "").strip()
+    if not api_key:
+        raise HTTPException(400, "api_key required")
+    try:
+        from api_router import set_user_byok
+        set_user_byok(user_data["sub"], api_key)
+        return {"ok": True, "message": "API key saved — your calls now use your own account."}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/settings/byok")
+async def delete_byok(request: Request):
+    """Remove user's BYOK — fall back to shared pool."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    from api_router import delete_user_byok
+    deleted = delete_user_byok(user_data["sub"])
+    return {"ok": True, "removed": deleted}
+
+
+@app.get("/api/admin/pool")
+async def pool_status(request: Request):
+    """Admin: pool health and account usage (requires admin tier)."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    row = db.execute("SELECT tier FROM users WHERE id=?", (user_data["sub"],)).fetchone()
+    db.close()
+    if not row or row["tier"] not in ("admin", "vps"):
+        raise HTTPException(403, "Admin only")
+    from api_router import pool_health
+    return pool_health()
+
+
+@app.post("/api/admin/pool/account")
+async def add_pool_account(request: Request):
+    """Admin: add a new API account to the pool."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    row = db.execute("SELECT tier FROM users WHERE id=?", (user_data["sub"],)).fetchone()
+    db.close()
+    if not row or row["tier"] != "admin":
+        raise HTTPException(403, "Admin only")
+    body = await request.json()
+    api_key = body.get("api_key", "").strip()
+    name = body.get("name", "").strip()
+    tier = int(body.get("tier", 1))
+    if not api_key or not name:
+        raise HTTPException(400, "api_key and name required")
+    from api_router import add_account
+    account_id = add_account(name, api_key, tier, body.get("notes", ""))
+    return {"ok": True, "account_id": account_id}
+
+
+@app.put("/api/admin/pool/account/{account_id}/tier")
+async def update_account_tier_endpoint(account_id: int, request: Request):
+    """Admin: update an account's Anthropic tier (adjusts rate limits)."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    row = db.execute("SELECT tier FROM users WHERE id=?", (user_data["sub"],)).fetchone()
+    db.close()
+    if not row or row["tier"] != "admin":
+        raise HTTPException(403, "Admin only")
+    body = await request.json()
+    tier = int(body.get("tier", 1))
+    from api_router import update_account_tier
+    update_account_tier(account_id, tier)
+    return {"ok": True}
+
 
 @app.get("/api/models")
 async def list_models(request: Request):

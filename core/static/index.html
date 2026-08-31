@@ -984,6 +984,35 @@
   <div class="usage-row"><span>Cost today</span><strong id="u-daily">—</strong></div>
   <div class="usage-row"><span>Cost this month</span><strong id="u-monthly">—</strong></div>
   <div class="usage-row" id="u-limit-row" style="display:none"><span>Daily limit</span><strong id="u-limit">—</strong></div>
+  <!-- Quota bar -->
+  <div id="u-quota-section" style="display:none;margin-top:0.6rem">
+    <div style="display:flex;justify-content:space-between;font-size:0.76rem;color:var(--muted);margin-bottom:0.3rem">
+      <span>Daily token quota</span><span id="u-quota-pct">0%</span>
+    </div>
+    <div style="background:var(--surface2);border-radius:4px;height:5px;overflow:hidden">
+      <div id="u-quota-bar" style="height:100%;border-radius:4px;background:var(--pu);transition:width 0.4s;width:0%"></div>
+    </div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-top:0.3rem" id="u-quota-label">—</div>
+  </div>
+  <hr style="border-color:var(--border);margin:0.5rem 0;">
+  <!-- BYOK section -->
+  <div id="u-byok-section">
+    <div style="font-size:0.8rem;font-weight:600;margin-bottom:0.4rem">Your API key</div>
+    <div id="u-byok-status" style="font-size:0.75rem;color:var(--muted);margin-bottom:0.4rem">Using shared pool</div>
+    <div id="u-byok-form" style="display:none">
+      <input type="password" id="u-byok-input" placeholder="sk-ant-api03-..."
+        style="width:100%;padding:0.4rem 0.6rem;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--tx);font-size:0.76rem;margin-bottom:0.3rem">
+      <button onclick="saveBYOK()" style="width:100%;padding:0.35rem;border-radius:6px;background:var(--pu);color:#fff;border:none;cursor:pointer;font-size:0.76rem">Save key</button>
+      <button onclick="toggleBYOKForm(false)" style="width:100%;padding:0.35rem;border-radius:6px;background:var(--surface2);color:var(--muted);border:none;cursor:pointer;font-size:0.76rem;margin-top:0.2rem">Cancel</button>
+    </div>
+    <button id="u-byok-btn" onclick="toggleBYOKForm(true)"
+      style="font-size:0.73rem;color:var(--pu-l);background:none;border:none;cursor:pointer;padding:0">
+      + Add your Anthropic API key →
+    </button>
+    <button id="u-byok-remove" onclick="removeBYOK()" style="display:none;font-size:0.73rem;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;margin-left:0.5rem">
+      Remove
+    </button>
+  </div>
   <hr style="border-color:var(--border);margin:0.5rem 0;">
   <div style="font-size:0.76rem;color:var(--muted)">Private and never used for AI training.</div>
 </div>
@@ -1943,7 +1972,77 @@ async function toggleUsage() {
       document.getElementById('u-limit').textContent = `$${d.daily_limit.toFixed(2)}`;
     }
   } catch(e) {}
+  // Load quota + BYOK status
+  try {
+    const qr = await fetch('/api/usage/quota', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (qr.ok) {
+      const q = await qr.json();
+      const section = document.getElementById('u-quota-section');
+      section.style.display = '';
+      const pct = Math.min(100, q.pct_today || 0);
+      document.getElementById('u-quota-pct').textContent = `${pct.toFixed(0)}%`;
+      const bar = document.getElementById('u-quota-bar');
+      bar.style.width = `${pct}%`;
+      bar.style.background = pct >= 90 ? '#f87171' : pct >= 70 ? '#fb923c' : 'var(--pu)';
+      const rem = (q.remaining_today || 0).toLocaleString();
+      const plan = q.plan || 'trial';
+      document.getElementById('u-quota-label').textContent =
+        `${rem} tokens remaining today · ${plan.charAt(0).toUpperCase()+plan.slice(1)} plan`;
+
+      // BYOK status
+      const byokStatus = document.getElementById('u-byok-status');
+      const byokBtn = document.getElementById('u-byok-btn');
+      const byokRemove = document.getElementById('u-byok-remove');
+      if (q.has_byok) {
+        byokStatus.textContent = '✓ Using your own API key';
+        byokStatus.style.color = 'var(--gn)';
+        byokBtn.style.display = 'none';
+        byokRemove.style.display = '';
+      } else {
+        byokStatus.textContent = 'Using shared pool · Add your key for dedicated access';
+        byokStatus.style.color = 'var(--muted)';
+        byokBtn.style.display = '';
+        byokRemove.style.display = 'none';
+      }
+    }
+  } catch(e) {}
   panel.classList.add('open');
+}
+
+function toggleBYOKForm(show) {
+  document.getElementById('u-byok-form').style.display = show ? 'block' : 'none';
+  document.getElementById('u-byok-btn').style.display = show ? 'none' : '';
+  if (show) document.getElementById('u-byok-input').focus();
+}
+
+async function saveBYOK() {
+  const key = document.getElementById('u-byok-input').value.trim();
+  if (!key) return;
+  try {
+    const r = await fetch('/api/settings/byok', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      showToast('API key saved — your calls now use your own account');
+      toggleBYOKForm(false);
+      document.getElementById('u-byok-input').value = '';
+      toggleUsage(); // refresh panel
+    } else {
+      showToast(d.detail || 'Invalid key', 4000);
+    }
+  } catch(e) { showToast('Error saving key', 4000); }
+}
+
+async function removeBYOK() {
+  await fetch('/api/settings/byok', {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  showToast('API key removed — using shared pool');
+  toggleUsage();
 }
 
 function showAuth() { document.getElementById('auth-modal').style.display = 'flex'; document.getElementById('email-input').focus(); }
