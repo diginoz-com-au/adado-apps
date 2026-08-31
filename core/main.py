@@ -9,7 +9,7 @@ from typing import Optional, List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import jwt
@@ -2850,6 +2850,20 @@ async def email_status(request: Request):
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    f = static_dir / "robots.txt"
+    if f.exists():
+        return FileResponse(str(f), media_type="text/plain")
+    return PlainTextResponse("User-agent: *\nAllow: /\n")
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    f = static_dir / "sitemap.xml"
+    if f.exists():
+        return FileResponse(str(f), media_type="application/xml")
+    return PlainTextResponse("", status_code=404)
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):

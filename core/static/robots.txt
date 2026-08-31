@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://adado.diginoz.com.au/sitemap.xml
