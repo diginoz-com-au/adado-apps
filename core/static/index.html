@@ -738,6 +738,163 @@
 
   @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
   @keyframes blink  { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  /* ── Interest word cloud overlay ── */
+  #interests-overlay {
+    position: fixed; inset: 0;
+    background: #0d0c14;
+    z-index: 300;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+  #interests-overlay.open { display: flex; }
+  .interests-header {
+    padding: 2rem 2rem 0.6rem;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .interests-header h1 {
+    font-size: 1.9rem; font-weight: 800;
+    background: linear-gradient(135deg, #a78bfa, #6e5bf0);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 0.3rem;
+  }
+  .interests-header p { color: #8b80c0; font-size: 0.9rem; }
+  .interests-counter { font-size: 0.8rem; color: #a78bfa; margin-top: 0.2rem; min-height: 1.2em; }
+  .interests-cloud {
+    flex: 1; overflow-y: auto;
+    padding: 0.75rem 1.25rem 0.5rem;
+    display: flex; flex-wrap: wrap;
+    gap: 0.42rem 0.32rem;
+    align-content: flex-start;
+    justify-content: center;
+    max-width: 860px; width: 100%;
+  }
+  .interest-pill {
+    padding: 0.32rem 0.75rem;
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s;
+    user-select: none;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .interest-pill:hover { transform: scale(1.06); }
+  .interest-pill.selected { transform: scale(1.08); }
+  .interests-footer {
+    padding: 0.65rem 2rem 1.5rem;
+    flex-shrink: 0; width: 100%;
+    max-width: 860px;
+    display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
+  }
+  .interests-cta {
+    width: 100%; max-width: 300px;
+    padding: 0.78rem;
+    background: var(--accent); border: none; border-radius: 12px;
+    color: white; font-size: 0.95rem; font-weight: 700;
+    cursor: pointer; transition: background 0.15s, transform 0.15s;
+    font-family: var(--font);
+  }
+  .interests-cta:hover { background: var(--accent-dim); transform: translateY(-1px); }
+  .interests-skip { font-size: 0.78rem; color: var(--muted); cursor: pointer; }
+  .interests-skip:hover { color: var(--text); }
+
+  /* ── Setup progress overlay ── */
+  #setup-overlay {
+    position: fixed; inset: 0;
+    background: #0d0c14;
+    z-index: 310;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+  }
+  #setup-overlay.open { display: flex; }
+  .setup-orb {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #9b8cf8, #6e5bf0 55%, #3a2d9e);
+    box-shadow: 0 0 40px 10px rgba(110,91,240,0.4);
+    animation: orbBreath 2s ease-in-out infinite;
+  }
+  .setup-title { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+  .setup-sub-text { font-size: 0.87rem; color: var(--muted); min-height: 1.2em; }
+  .setup-bar { width: 200px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .setup-fill {
+    height: 100%; background: linear-gradient(90deg, #6e5bf0, #a78bfa);
+    border-radius: 2px; transition: width 0.5s ease; width: 0%;
+  }
+
+  /* ── Tutorial overlay ── */
+  #tutorial-overlay {
+    position: fixed; inset: 0;
+    background: rgba(13,12,20,0.96);
+    backdrop-filter: blur(12px);
+    z-index: 320;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  #tutorial-overlay.open { display: flex; }
+  .tutorial-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2rem;
+    width: min(420px, 100%);
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+    animation: fadeIn 0.3s ease;
+  }
+  .tut-dots { display: flex; gap: 0.4rem; justify-content: center; margin-bottom: 1.5rem; }
+  .tut-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: all 0.25s; }
+  .tut-dot.active { background: var(--accent); width: 20px; border-radius: 3px; }
+  .tut-step { display: none; }
+  .tut-step.active { display: block; animation: fadeIn 0.2s ease; }
+  .tut-icon { font-size: 2.5rem; margin-bottom: 0.75rem; text-align: center; }
+  .tut-step h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.4rem; text-align: center; }
+  .tut-step > p { color: var(--muted); font-size: 0.88rem; text-align: center; line-height: 1.6; margin-bottom: 1.2rem; }
+  .tut-example {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0.8rem 0.9rem;
+    font-size: 0.82rem; line-height: 1.65; margin-bottom: 1.25rem; color: var(--muted);
+  }
+  .tut-next {
+    width: 100%; padding: 0.75rem;
+    background: var(--accent); border: none; border-radius: 12px;
+    color: white; font-size: 0.93rem; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+    font-family: var(--font);
+  }
+  .tut-next:hover { background: var(--accent-dim); }
+  .tut-skip { text-align: center; margin-top: 0.55rem; font-size: 0.79rem; color: var(--muted); cursor: pointer; }
+  .tut-skip:hover { color: var(--text); }
+
+  /* ── App library tier labels ── */
+  .lib-tier-label {
+    grid-column: 1 / -1;
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-top: 0.6rem; padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .lib-tier-label:first-child { margin-top: 0; }
+  .lib-warning-banner {
+    grid-column: 1 / -1;
+    background: rgba(251,191,36,0.07);
+    border: 1px solid rgba(251,191,36,0.28);
+    border-radius: 8px; padding: 0.45rem 0.7rem;
+    font-size: 0.78rem; color: #fbbf24; line-height: 1.4;
+  }
+  .lib-tier-ph {
+    grid-column: 1 / -1;
+    font-size: 0.79rem; color: var(--muted); padding: 0.25rem 0;
+  }
 </style>
 </head>
 <body>
@@ -954,6 +1111,75 @@
       <button class="pay-btn" id="fwd-btn" onclick="doForward()">Set up forwarding →</button>
       <button class="pay-btn" style="background:var(--surface2);color:var(--muted);margin-top:0.5rem" onclick="closePayOverlay()">Done, take me to Ada →</button>
     </div>
+  </div>
+</div>
+
+<!-- Interest word cloud overlay -->
+<div id="interests-overlay">
+  <div class="interests-header">
+    <h1>What are you into?</h1>
+    <p>Pick your interests — Ada will set up personalised apps for you.</p>
+    <div class="interests-counter" id="interests-counter">Tap anything that interests you</div>
+  </div>
+  <div class="interests-cloud" id="interests-cloud"></div>
+  <div class="interests-footer">
+    <button class="interests-cta" onclick="startInterestSetup()">Get Started →</button>
+    <div class="interests-skip" onclick="skipInterests()">Skip for now</div>
+  </div>
+</div>
+
+<!-- Setup progress overlay -->
+<div id="setup-overlay">
+  <div class="setup-orb"></div>
+  <div class="setup-title">Setting up your apps…</div>
+  <div class="setup-sub-text" id="setup-sub-text">Ada is personalising your experience</div>
+  <div class="setup-bar"><div class="setup-fill" id="setup-fill"></div></div>
+</div>
+
+<!-- Tutorial overlay -->
+<div id="tutorial-overlay">
+  <div class="tutorial-card">
+    <div class="tut-dots">
+      <div class="tut-dot active" id="tut-dot-0"></div>
+      <div class="tut-dot" id="tut-dot-1"></div>
+      <div class="tut-dot" id="tut-dot-2"></div>
+    </div>
+    <div class="tut-step active" id="tut-step-0">
+      <div class="tut-icon">💬</div>
+      <h2>Just talk to Ada</h2>
+      <p>No commands to learn. No menus to navigate. Just say what needs doing.</p>
+      <div class="tut-example">
+        <span style="color:#a78bfa">You:</span> "Summarise my emails and flag anything urgent"<br>
+        <span style="color:#60a5fa">Ada:</span> "Done — 3 need your attention. Invoice due Friday flagged."
+      </div>
+      <button class="tut-next" onclick="tutNext(1)">Next →</button>
+    </div>
+    <div class="tut-step" id="tut-step-1">
+      <div class="tut-icon">🧩</div>
+      <h2>Your apps, your way</h2>
+      <p>Ada connects to specialist apps that give her superpowers in the areas you care about.</p>
+      <div class="tut-example" style="display:flex;gap:0.4rem;flex-wrap:wrap;color:inherit">
+        <span style="background:rgba(110,91,240,0.15);border:1px solid rgba(110,91,240,0.4);padding:0.2rem 0.55rem;border-radius:20px;font-size:0.76rem;color:#a78bfa">💰 Finance</span>
+        <span style="background:rgba(110,91,240,0.15);border:1px solid rgba(110,91,240,0.4);padding:0.2rem 0.55rem;border-radius:20px;font-size:0.76rem;color:#a78bfa">📬 Email</span>
+        <span style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);padding:0.2rem 0.55rem;border-radius:20px;font-size:0.76rem;color:#34d399">🏋️ Health</span>
+        <span style="background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.3);padding:0.2rem 0.55rem;border-radius:20px;font-size:0.76rem;color:#fb923c">📋 Projects</span>
+        <span style="background:rgba(244,114,182,0.12);border:1px solid rgba(244,114,182,0.3);padding:0.2rem 0.55rem;border-radius:20px;font-size:0.76rem;color:#f472b6">+ more</span>
+      </div>
+      <button class="tut-next" onclick="tutNext(2)">Next →</button>
+    </div>
+    <div class="tut-step" id="tut-step-2">
+      <div class="tut-icon">⚡</div>
+      <h2>Everything gets done</h2>
+      <p>Ada doesn't just answer — she acts. Set it, forget it, and come back to results.</p>
+      <div class="tut-example">
+        <span style="color:#34d399">✓</span> Invoice sent to client<br>
+        <span style="color:#34d399">✓</span> Meeting rescheduled<br>
+        <span style="color:#34d399">✓</span> Weekly budget summary ready<br>
+        <span style="color:#a78bfa">⚡</span> Reminder set for tomorrow 9 am
+      </div>
+      <button class="tut-next" onclick="closeTutorial()">Let's go →</button>
+    </div>
+    <div class="tut-skip" onclick="closeTutorial()">Skip tutorial</div>
   </div>
 </div>
 
@@ -1473,27 +1699,36 @@ async function loadApps() {
   updateAppTabs();
 }
 
-// ─── App Library modal ───────────────────────────────────────────────────────
+// ─── App Library modal (3-tier) ──────────────────────────────────────────────
 function openAppLibrary() {
-  const modal     = document.getElementById('app-library-modal');
-  const tilesEl   = document.getElementById('lib-tiles');
+  const modal      = document.getElementById('app-library-modal');
+  const tilesEl    = document.getElementById('lib-tiles');
   const addedSlugs = new Set(getAddedApps());
-  const allApps   = _appsCache.length ? _appsCache : _defaultApps;
-
+  const allApps    = _appsCache.length ? _appsCache : _defaultApps;
   tilesEl.innerHTML = '';
-  allApps.forEach(app => {
+
+  // Tier classification: adado- prefix = official; tier===3 = github; rest = endorsed
+  const tier1 = allApps.filter(a => (a.id || '').startsWith('adado-') || a.tier === 1);
+  const tier2 = allApps.filter(a => !((a.id || '').startsWith('adado-')) && a.tier !== 3 && a.tier !== 1);
+  const tier3 = allApps.filter(a => a.tier === 3);
+
+  function addLabel(text) {
+    const el = document.createElement('div');
+    el.className = 'lib-tier-label';
+    el.textContent = text;
+    tilesEl.appendChild(el);
+  }
+
+  function addTile(app) {
     const slug    = app.id || slugify(app.name);
     const emoji   = app.icon || app.emoji || '🔲';
     const isAdded = addedSlugs.has(slug);
     const isSoon  = !!app.coming_soon;
-
-    const tile = document.createElement('div');
+    const tile    = document.createElement('div');
     tile.className = `lib-tile${isAdded ? ' enabled' : ''}${isSoon ? ' coming-soon' : ''}`;
-    tile.innerHTML = `
-      <span class="lt-icon">${emoji}</span>
+    tile.innerHTML = `<span class="lt-icon">${emoji}</span>
       <span class="lt-name">${escapeHtml(app.name)}</span>
-      <span class="lt-action">${isAdded ? '✓ Added' : isSoon ? 'Coming soon' : '+ Add'}</span>
-    `;
+      <span class="lt-action">${isAdded ? '✓ Added' : isSoon ? 'Coming soon' : '+ Add'}</span>`;
     if (!isAdded && !isSoon) {
       tile.onclick = () => {
         const arr = getAddedApps();
@@ -1501,13 +1736,29 @@ function openAppLibrary() {
         closeAppLibrary();
         updateAppTabs();
         renderWelcome();
-        // Auto-switch to the newly added agent
         const agentId = app.agent?.id || slug + '-agent';
         switchAgent(slug, app.name, emoji, agentId);
       };
     }
     tilesEl.appendChild(tile);
-  });
+  }
+
+  if (tier1.length) { addLabel('✦ Built by AdaDo'); tier1.forEach(addTile); }
+  if (tier2.length) { addLabel('★ Recommended'); tier2.forEach(addTile); }
+
+  addLabel('⟨/⟩ GitHub Direct');
+  const warn = document.createElement('div');
+  warn.className = 'lib-warning-banner';
+  warn.textContent = '⚠ Community apps are not tested by AdaDo. Install at your own risk.';
+  tilesEl.appendChild(warn);
+  if (tier3.length) {
+    tier3.forEach(addTile);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'lib-tier-ph';
+    ph.textContent = 'Paste a GitHub repo URL to install any community app — coming soon.';
+    tilesEl.appendChild(ph);
+  }
 
   modal.style.display = 'flex';
 }
@@ -1606,7 +1857,11 @@ async function doAuth() {
     closeAuth();
     connectWS();
     renderWelcome();
-    maybeShowPayOverlay();
+    if (isSignup) {
+      showInterestsOverlay();
+    } else {
+      maybeShowPayOverlay();
+    }
   } catch(e) { errEl.textContent = 'Connection error'; }
 }
 
@@ -1825,6 +2080,153 @@ function dismissProtonBanner() {
   localStorage.setItem('proton_banner_dismissed', '1');
   document.getElementById('proton-banner').classList.remove('open');
 }
+
+// ─── Interest word cloud ──────────────────────────────────────────────────────
+const _INTERESTS = [
+  {e:'💰',l:'Finance',s:3},{e:'🪙',l:'Crypto',s:2},{e:'📈',l:'Stock Investing',s:2},
+  {e:'📊',l:'Budgeting',s:2},{e:'🏋️',l:'Health & Fitness',s:3},{e:'🏃',l:'Running',s:2},
+  {e:'🧘',l:'Yoga',s:2},{e:'🥗',l:'Nutrition',s:1},{e:'😴',l:'Sleep',s:2},
+  {e:'🧠',l:'Mental Health',s:2},{e:'🕯️',l:'Meditation',s:2},{e:'📸',l:'Photography',s:3},
+  {e:'🎛️',l:'Music Production',s:2},{e:'🎧',l:'DJ Mixing',s:1},{e:'🎙️',l:'Podcasting',s:2},
+  {e:'✍️',l:'Fiction Writing',s:2},{e:'📝',l:'Blogging',s:2},{e:'🎸',l:'Guitar',s:2},
+  {e:'🚴',l:'Cycling',s:2},{e:'🏊',l:'Swimming',s:2},{e:'🧗',l:'Rock Climbing',s:1},
+  {e:'🥾',l:'Hiking',s:2},{e:'🎮',l:'Gaming & Esports',s:3},{e:'🏠',l:'Home Automation',s:2},
+  {e:'💡',l:'Smart Home',s:1},{e:'🍳',l:'Cooking',s:3},{e:'🥐',l:'Baking',s:2},
+  {e:'☕',l:'Coffee',s:2},{e:'🍺',l:'Homebrewing',s:1},{e:'🍷',l:'Wine',s:2},
+  {e:'✈️',l:'Trip Planning',s:3},{e:'🗣️',l:'Language Learning',s:2},{e:'📚',l:'Reading',s:3},
+  {e:'♟️',l:'Chess',s:1},{e:'🔬',l:'Data Science',s:2},{e:'💻',l:'Web Dev',s:3},
+  {e:'⚙️',l:'DevOps',s:2},{e:'🛡️',l:'Cybersecurity',s:2},{e:'🪚',l:'Woodworking',s:1},
+  {e:'🖨️',l:'3D Printing',s:1},{e:'🌱',l:'Gardening',s:2},{e:'🐕',l:'Dog Owner',s:2},
+  {e:'🐈',l:'Cat Owner',s:2},{e:'🐠',l:'Aquarium',s:1},{e:'🦜',l:'Bird Watching',s:1},
+  {e:'🔧',l:'Car Maintenance',s:1},{e:'🏍️',l:'Motorcycle',s:1},{e:'🔋',l:'EV',s:1},
+  {e:'🎌',l:'Anime',s:2},{e:'📖',l:'Comics',s:2},{e:'🎵',l:'Vinyl Records',s:1},
+  {e:'🧱',l:'LEGO',s:2},{e:'🎲',l:'Board Games',s:2},{e:'🌳',l:'Genealogy',s:1},
+  {e:'💹',l:'Investing',s:2},{e:'💼',l:'Freelancing',s:2},{e:'🛒',l:'E-commerce',s:2},
+  {e:'📦',l:'Dropshipping',s:1},{e:'🎬',l:'Content Creation',s:2},{e:'📰',l:'Newsletter',s:1},
+  {e:'🌿',l:'Sustainability',s:2},{e:'☀️',l:'Solar Energy',s:1},{e:'🐝',l:'Beekeeping',s:1},
+  {e:'🎣',l:'Fishing',s:2},{e:'🦌',l:'Hunting',s:1},{e:'⛳',l:'Golf',s:2},
+  {e:'🎾',l:'Tennis',s:2},{e:'🏀',l:'Basketball',s:2},{e:'⚽',l:'Soccer',s:2},
+  {e:'🏏',l:'Cricket',s:1},{e:'🏉',l:'Rugby',s:1},{e:'🤸',l:'Triathlon',s:1},
+  {e:'🥊',l:'Martial Arts',s:2},{e:'🏄',l:'Surfing',s:2},{e:'⛷️',l:'Skiing',s:1},
+  {e:'🛹',l:'Skateboarding',s:1},{e:'🧶',l:'Knitting',s:1},{e:'🧵',l:'Sewing',s:1},
+  {e:'🏺',l:'Pottery',s:1},{e:'✒️',l:'Calligraphy',s:1},{e:'🤝',l:'Volunteering',s:1},
+  {e:'👨‍👧',l:'Parenting',s:2},{e:'💍',l:'Wedding Planning',s:1},{e:'🤍',l:'Minimalism',s:2},
+  {e:'📔',l:'Journalling',s:2},{e:'🏛️',l:'Stoicism',s:1}
+];
+
+const _PILL_PAL = [
+  {c:'#a78bfa',bg:'rgba(167,139,250,0.1)',bd:'rgba(167,139,250,0.28)',bds:'rgba(167,139,250,0.7)'},
+  {c:'#60a5fa',bg:'rgba(96,165,250,0.1)',bd:'rgba(96,165,250,0.28)',bds:'rgba(96,165,250,0.7)'},
+  {c:'#34d399',bg:'rgba(52,211,153,0.1)',bd:'rgba(52,211,153,0.28)',bds:'rgba(52,211,153,0.7)'},
+  {c:'#f472b6',bg:'rgba(244,114,182,0.1)',bd:'rgba(244,114,182,0.28)',bds:'rgba(244,114,182,0.7)'},
+  {c:'#fb923c',bg:'rgba(251,146,60,0.1)',bd:'rgba(251,146,60,0.28)',bds:'rgba(251,146,60,0.7)'},
+  {c:'#2dd4bf',bg:'rgba(45,212,191,0.1)',bd:'rgba(45,212,191,0.28)',bds:'rgba(45,212,191,0.7)'},
+  {c:'#fbbf24',bg:'rgba(251,191,36,0.1)',bd:'rgba(251,191,36,0.28)',bds:'rgba(251,191,36,0.7)'},
+  {c:'#f87171',bg:'rgba(248,113,113,0.1)',bd:'rgba(248,113,113,0.28)',bds:'rgba(248,113,113,0.7)'},
+];
+
+function showInterestsOverlay() {
+  renderInterestsCloud();
+  document.getElementById('interests-overlay').classList.add('open');
+  if (window.updateAdaChatBubble) window.updateAdaChatBubble();
+}
+
+function renderInterestsCloud() {
+  const cloud = document.getElementById('interests-cloud');
+  cloud.innerHTML = '';
+  const fz = ['0.76rem', '0.9rem', '1.06rem'];
+  _INTERESTS.forEach((item, i) => {
+    const pal  = _PILL_PAL[(i * 3 + Math.floor(i / 6)) % 8];
+    const pill = document.createElement('div');
+    pill.className = 'interest-pill';
+    pill.dataset.val = item.l;
+    pill.style.fontSize   = fz[item.s - 1];
+    pill.style.color      = pal.c;
+    pill.style.background = pal.bg;
+    pill.style.borderColor = pal.bd;
+    pill.textContent = item.e + ' ' + item.l;
+    pill.addEventListener('click', () => {
+      const on = pill.classList.toggle('selected');
+      pill.style.background  = on ? pal.bg.replace('0.1', '0.22') : pal.bg;
+      pill.style.borderColor = on ? pal.bds : pal.bd;
+      pill.style.boxShadow   = on ? `0 0 10px ${pal.bg.replace('0.1','0.3')}` : '';
+      updateInterestsCounter();
+    });
+    cloud.appendChild(pill);
+  });
+  updateInterestsCounter();
+}
+
+function updateInterestsCounter() {
+  const n = document.querySelectorAll('.interest-pill.selected').length;
+  document.getElementById('interests-counter').textContent =
+    n === 0 ? 'Tap anything that interests you' : `${n} selected`;
+}
+
+function skipInterests() {
+  document.getElementById('interests-overlay').classList.remove('open');
+  showTutorial();
+}
+
+async function startInterestSetup() {
+  const selected = [...document.querySelectorAll('.interest-pill.selected')].map(p => p.dataset.val);
+  document.getElementById('interests-overlay').classList.remove('open');
+
+  const setupEl = document.getElementById('setup-overlay');
+  const fillEl  = document.getElementById('setup-fill');
+  const subEl   = document.getElementById('setup-sub-text');
+  setupEl.classList.add('open');
+
+  if (selected.length > 0 && token) {
+    fetch('/api/apps/install-interests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ interests: selected })
+    }).catch(() => {});
+  }
+
+  const steps = [
+    [15,  'Finding your apps…'],
+    [40,  'Installing agents…'],
+    [65,  'Personalising Ada…'],
+    [88,  'Almost ready…'],
+    [100, 'You\'re all set! ✨'],
+  ];
+  for (const [pct, msg] of steps) {
+    fillEl.style.width = pct + '%';
+    subEl.textContent  = msg;
+    await new Promise(r => setTimeout(r, pct === 100 ? 700 : 600));
+  }
+  await new Promise(r => setTimeout(r, 350));
+  setupEl.classList.remove('open');
+  showTutorial();
+}
+
+// ─── Tutorial ─────────────────────────────────────────────────────────────────
+let _tutStep = 0;
+
+function showTutorial() {
+  document.getElementById('tutorial-overlay').classList.add('open');
+  tutSetStep(0);
+  if (window.updateAdaChatBubble) window.updateAdaChatBubble();
+}
+
+function tutSetStep(n) {
+  _tutStep = n;
+  document.querySelectorAll('.tut-step').forEach((el, i) => el.classList.toggle('active', i === n));
+  [0, 1, 2].forEach(i => {
+    const dot = document.getElementById('tut-dot-' + i);
+    if (dot) dot.classList.toggle('active', i === n);
+  });
+}
+
+function tutNext(n) { tutSetStep(n); }
+
+function closeTutorial() {
+  document.getElementById('tutorial-overlay').classList.remove('open');
+  if (window.updateAdaChatBubble) window.updateAdaChatBubble();
+  maybeShowPayOverlay();
+}
 </script>
 
 <!-- ── Ada support chat widget (pre-auth only) ── -->
@@ -1986,27 +2388,39 @@ function dismissProtonBanner() {
   var _chatSessionId = 'sc-' + Math.random().toString(36).slice(2, 10);
 
   function _isLoggedIn() {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('adado_token');
+  }
+
+  function _isOnboarding() {
+    return ['interests-overlay','setup-overlay','tutorial-overlay'].some(function(id) {
+      var el = document.getElementById(id);
+      return el && el.classList.contains('open');
+    });
   }
 
   function _showBubble() {
     var el = document.getElementById('ada-chat-bubble');
-    if (el && !_isLoggedIn()) el.classList.add('visible');
+    if (el && (!_isLoggedIn() || _isOnboarding())) el.classList.add('visible');
   }
+
+  window.updateAdaChatBubble = function() {
+    var el = document.getElementById('ada-chat-bubble');
+    if (!el) return;
+    var show = !_isLoggedIn() || _isOnboarding();
+    if (show) {
+      el.classList.add('visible');
+    } else {
+      el.classList.remove('visible');
+      document.getElementById('ada-chat-panel').classList.remove('open');
+      _chatOpen = false;
+    }
+  };
 
   // Show immediately; re-evaluate whenever auth state might change
   _showBubble();
   window.addEventListener('storage', function(e) {
-    if (e.key === 'token') {
-      var el = document.getElementById('ada-chat-bubble');
-      if (!el) return;
-      if (_isLoggedIn()) {
-        el.classList.remove('visible');
-        document.getElementById('ada-chat-panel').classList.remove('open');
-        _chatOpen = false;
-      } else {
-        el.classList.add('visible');
-      }
+    if (e.key === 'adado_token') {
+      window.updateAdaChatBubble();
     }
   });
 

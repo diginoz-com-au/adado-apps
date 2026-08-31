@@ -655,6 +655,28 @@ async def cli_login(req: LoginRequest):
         "onboarding_complete": bool(user["onboarding_complete"]),
     }
 
+@app.post("/api/auth/refresh")
+async def refresh_token(request: Request):
+    """
+    Silently rotate a JWT before it expires.
+    Client should call this when token has < 7 days left.
+    Returns a fresh 30-day token without requiring password re-entry.
+    """
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+    db.close()
+    if not user:
+        raise HTTPException(401, "User not found")
+    new_token = make_token(user["id"], user["email"])
+    return {
+        "token": new_token,
+        "expires_in": 86400 * 30,
+        "message": "Token refreshed",
+    }
+
 @app.get("/api/auth/me")
 async def get_me(request: Request):
     user_data = get_auth_user(request)
@@ -678,6 +700,8 @@ async def get_me(request: Request):
         "trial_days_left": max(0, int((trial_ends - time.time()) / 86400)) if trial_ends else 0,
         "onboarding_complete": bool(user["onboarding_complete"]),
         "onboarding_data": onboarding,
+        "token_exp": user_data.get("exp"),
+        "token_days_left": max(0, int((user_data.get("exp", 0) - time.time()) / 86400)),
     }
 
 @app.get("/api/auth/export")
