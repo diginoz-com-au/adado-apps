@@ -899,6 +899,51 @@
 </head>
 <body>
 
+<!-- ── Maintenance banner ── -->
+<div id="maintenance-banner" style="display:none">
+  <span id="maintenance-msg"></span>
+  <button onclick="document.getElementById('maintenance-banner').style.display='none'" title="Dismiss">✕</button>
+</div>
+<style>
+  #maintenance-banner {
+    position: relative;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.4;
+    text-align: center;
+  }
+  #maintenance-banner[data-level="info"]    { background: #1a2744; color: #7ec8ff; border-bottom: 1px solid #2a4a80; }
+  #maintenance-banner[data-level="warning"] { background: #2a1e00; color: #ffd166; border-bottom: 1px solid #6b4a00; }
+  #maintenance-banner[data-level="error"]   { background: #2a0a0a; color: #ff8080; border-bottom: 1px solid #6b1a1a; }
+  #maintenance-banner button {
+    background: none; border: none; cursor: pointer; opacity: 0.6;
+    font-size: 0.9rem; padding: 0 0.25rem; color: inherit; flex-shrink: 0;
+  }
+  #maintenance-banner button:hover { opacity: 1; }
+</style>
+<script>
+(function() {
+  var _dismissed = sessionStorage.getItem('maintenance-dismissed');
+  if (_dismissed) return;
+  fetch('/api/maintenance').then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.active || !d.message) return;
+    var banner = document.getElementById('maintenance-banner');
+    document.getElementById('maintenance-msg').textContent = d.message;
+    banner.setAttribute('data-level', d.level || 'info');
+    banner.style.display = 'flex';
+    banner.querySelector('button').addEventListener('click', function() {
+      sessionStorage.setItem('maintenance-dismissed', '1');
+    });
+  }).catch(function(){});
+})();
+</script>
+
 <!-- Top bar -->
 <div class="topbar">
   <div class="logo" onclick="goHome()">

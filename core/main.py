@@ -539,25 +539,31 @@ async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, mode
 async def stream_ollama(messages: list, soul: str, websocket: WebSocket) -> tuple[str, int, int]:
     import httpx
     full = ""
+    # Use native /api/chat endpoint with think:false to suppress qwen3 extended thinking
+    all_messages = [{"role": "system", "content": soul}] + messages
     payload = {
         "model": CLAUDE_MODEL,
-        "messages": [{"role": "system", "content": soul}] + messages,
+        "messages": all_messages,
         "stream": True,
+        "think": False,
+        "options": {"num_ctx": 8192},
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream("POST", f"{OLLAMA_URL}/v1/chat/completions", json=payload) as resp:
+        async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as resp:
             async for line in resp.aiter_lines():
-                if not line or line == "data: [DONE]":
+                if not line:
                     continue
-                if line.startswith("data: "):
-                    try:
-                        chunk_data = json.loads(line[6:])
-                        delta = chunk_data["choices"][0]["delta"].get("content", "")
-                        if delta:
-                            full += delta
-                            await websocket.send_json({"type": "chunk", "content": delta})
-                    except Exception:
-                        pass
+                try:
+                    chunk_data = json.loads(line)
+                    # Native Ollama format: {"message": {"content": "..."}, "done": bool}
+                    delta = chunk_data.get("message", {}).get("content", "")
+                    if delta:
+                        full += delta
+                        await websocket.send_json({"type": "chunk", "content": delta})
+                    if chunk_data.get("done"):
+                        break
+                except Exception:
+                    pass
     # Estimate tokens for local models (free, but track volume)
     input_tok  = sum(_estimate_tokens(m.get("content", "")) for m in messages) + _estimate_tokens(soul)
     output_tok = _estimate_tokens(full)
@@ -2891,7 +2897,7 @@ _PLANE_PROJECT_ID = "644b9571-3eba-414e-bf6b-ed16012d86d0"
 # Escalation log path (Ada monitors this)
 _ESCALATION_LOG = Path("/data/support-escalations.log")
 
-_SUPPORT_SYSTEM = """You are Ada, AdaDo's support agent. You help users with:
+_SUPPORT_SYSTEM = """You are Ada, AdaDo's support assistant. You help new and existing users with:
 - Signup and onboarding issues
 - Payment and subscription problems
 - App installation and configuration
@@ -2900,10 +2906,12 @@ _SUPPORT_SYSTEM = """You are Ada, AdaDo's support agent. You help users with:
 
 AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, every app included (email, tasks, calendar, files, and more).
 
+CRITICAL PRIVACY RULE: You are a public-facing support agent. You have absolutely NO access to any user's personal data, email address, name, or account information. You do NOT know who this person is. Never mention, guess, or reveal any email address or name. Never say "you're on [email]" or "I can see your account". Treat every person as a completely anonymous visitor. If you find yourself about to write an email address, stop and remove it.
+
 You are warm, fast, and competent. You fix things — you don't just explain them.
 
-For any action that would require infrastructure changes, data deletion, or system modifications, say: "I need to check with Dan before doing that — I'll escalate this now." and include this exact tag at the end of your reply:
-<ESCALATE user="USER_EMAIL_OR_UNKNOWN">brief description of what needs admin action</ESCALATE>"""
+For any action that would require infrastructure changes, data deletion, or system modifications, say: "I'll escalate this to our support team now." and include this exact tag at the end of your reply:
+<ESCALATE>brief description of what needs admin action</ESCALATE>"""
 
 # Problem signal words for Python-side ticket classification
 _PROBLEM_KEYWORDS = [
@@ -3042,52 +3050,37 @@ async def support_chat(req: SupportChatRequest, request: Request):
 
     raw_reply = ""
 
-    if USE_ANTHROPIC:
-        try:
-            import anthropic
-            proxy = CLAUDE_PROXY_URL or (
-                "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
-            )
-            if proxy:
-                client = anthropic.AsyncAnthropic(api_key="proxy", base_url=proxy)
-            elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
-                client = anthropic.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
-            else:
-                client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-            resp = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=600,
-                system=_SUPPORT_SYSTEM,
-                messages=history,
-            )
-            raw_reply = resp.content[0].text if resp.content else "Sorry, I couldn't respond right now."
-        except Exception as e:
-            raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
-    else:
-        try:
-            import httpx
-            payload = {
-                "model": CLAUDE_MODEL,
-                "messages": [
-                    {"role": "system", "content": _SUPPORT_SYSTEM},
-                    *history,
-                ],
-                "stream": False,
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(f"{OLLAMA_URL}/v1/chat/completions", json=payload)
-                data = r.json()
-                raw_reply = data["choices"][0]["message"]["content"]
-        except Exception as e:
-            raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
+    # Support chat inference — uses Anthropic via proxy (Ollama too slow on CPU-only host)
+    try:
+        import anthropic as _anthro
+        _proxy = CLAUDE_PROXY_URL or (
+            "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+        )
+        if _proxy:
+            _aclient = _anthro.AsyncAnthropic(api_key="proxy", base_url=_proxy)
+        elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+            _aclient = _anthro.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+        else:
+            _aclient = _anthro.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        _resp = await _aclient.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=_SUPPORT_SYSTEM,
+            messages=history,
+        )
+        raw_reply = _resp.content[0].text if _resp.content else "Sorry, I couldn't respond right now."
+    except Exception as e:
+        raw_reply = f"Hi! I'm having a brief technical hiccup. Please try again in a moment, or email support@adadoai.com if this keeps happening."
+
+    # Post-process: strip any email addresses that leaked through (proxy may inject context)
+    raw_reply = _re.sub(r'\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b', '[email protected]', raw_reply)
 
     # Parse ESCALATE tag from reply (model-driven for admin-action cases)
     escalated = False
-    esc_match = _re.search(r'<ESCALATE(?:\s+user="([^"]*)")?>(.*?)</ESCALATE>', raw_reply, _re.DOTALL)
+    esc_match = _re.search(r'<ESCALATE[^>]*>(.*?)</ESCALATE>', raw_reply, _re.DOTALL)
     if esc_match:
-        esc_user = esc_match.group(1) or ""
-        esc_issue = esc_match.group(2).strip()
-        _log_escalation(issue=esc_issue, user=esc_user, session_id=session_id)
+        esc_issue = esc_match.group(1).strip()
+        _log_escalation(issue=esc_issue, user="anonymous", session_id=session_id)
         escalated = True
         raw_reply = _re.sub(r"\s*<ESCALATE[^>]*>.*?</ESCALATE>", "", raw_reply, flags=_re.DOTALL).strip()
 
@@ -3127,6 +3120,55 @@ async def support_chat(req: SupportChatRequest, request: Request):
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# ─── Maintenance banner ───────────────────────────────────────────────────────
+
+_MAINTENANCE_FILE = Path("/data/maintenance.json")
+
+def _read_maintenance() -> dict:
+    try:
+        if _MAINTENANCE_FILE.exists():
+            import json as _json
+            return _json.loads(_MAINTENANCE_FILE.read_text())
+    except Exception:
+        pass
+    return {"active": False, "message": "", "level": "info"}
+
+def _write_maintenance(data: dict):
+    try:
+        import json as _json
+        _MAINTENANCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _MAINTENANCE_FILE.write_text(_json.dumps(data))
+    except Exception:
+        pass
+
+@app.get("/api/maintenance")
+async def get_maintenance():
+    return _read_maintenance()
+
+class MaintenanceRequest(BaseModel):
+    active: bool = True
+    message: str = ""
+    level: str = "info"  # info | warning | error
+
+@app.post("/api/maintenance")
+async def set_maintenance(req: MaintenanceRequest, request: Request):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    data = {"active": req.active, "message": req.message, "level": req.level}
+    _write_maintenance(data)
+    return data
+
+@app.delete("/api/maintenance")
+async def clear_maintenance(request: Request):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    _write_maintenance({"active": False, "message": "", "level": "info"})
+    return {"active": False}
+
+# ─── robots / sitemap ─────────────────────────────────────────────────────────
 
 @app.get("/robots.txt", include_in_schema=False)
 async def robots():
