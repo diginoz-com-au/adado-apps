@@ -1,0 +1,15 @@
+{
+  "name": "adado-tests",
+  "version": "1.0.0",
+  "description": "Playwright E2E and API smoke tests for AdaDo",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test tests/api/",
+    "test:e2e": "playwright test tests/e2e/",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0"
+  }
+}

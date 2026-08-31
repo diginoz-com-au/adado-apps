@@ -50,6 +50,7 @@ services:
       - adado_core_data:/data
       - ../apps:/apps:ro
       - ../agents:/agents:ro
+      - ../core/static:/app/static:ro
     networks: [adado]
     profiles: ["core", "all"]
 
