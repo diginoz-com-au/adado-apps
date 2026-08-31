@@ -70,6 +70,31 @@ def get_instance(cfg: dict) -> str:
 def get_token(cfg: dict) -> str | None:
     return cfg.get("token") or os.environ.get("ADO_TOKEN")
 
+def maybe_refresh_token(cfg: dict, instance: str) -> dict:
+    """
+    Silently refresh JWT if < 7 days left.
+    Returns updated cfg (caller should save if changed).
+    """
+    token = get_token(cfg)
+    if not token:
+        return cfg
+    try:
+        import base64 as _b64, json as _json
+        parts = token.split(".")
+        if len(parts) != 3:
+            return cfg
+        payload = _json.loads(_b64.b64decode(parts[1] + "=="))
+        exp = payload.get("exp", 0)
+        days_left = (exp - __import__("time").time()) / 86400
+        if days_left > 7:
+            return cfg
+        resp = api_post(f"{instance}/api/auth/refresh", {}, token=token)
+        if resp.get("token"):
+            cfg["token"] = resp["token"]
+    except Exception:
+        pass
+    return cfg
+
 # ─── API helpers ──────────────────────────────────────────────────────────────
 
 def api_get(url: str, token: str | None = None) -> dict:
@@ -587,6 +612,7 @@ examples:
     sub.add_parser("status", help="Show Ada status and connection info")
     sub.add_parser("apps",   help="List installed apps")
     sub.add_parser("login",  help="Sign in to your Ada account")
+    sub.add_parser("logout", help="Sign out and clear saved token")
 
     cfg_p = sub.add_parser("config", help="Show or set configuration")
     cfg_p.add_argument("key",   nargs="?", help="Config key")
@@ -594,6 +620,14 @@ examples:
 
     args = parser.parse_args()
     cfg = load_config()
+
+    # Silently refresh JWT if expiring soon (< 7 days)
+    if get_token(cfg):
+        instance = get_instance(cfg)
+        updated = maybe_refresh_token(cfg, instance)
+        if updated.get("token") != cfg.get("token"):
+            save_config(updated)
+            cfg = updated
 
     if args.cmd in (None, "chat"):
         cmd_chat(cfg)
@@ -603,6 +637,11 @@ examples:
         cmd_apps(cfg)
     elif args.cmd == "login":
         cmd_login(cfg, args)
+    elif args.cmd == "logout":
+        cfg.pop("token", None)
+        cfg.pop("email", None)
+        save_config(cfg)
+        print("  Signed out. Run 'ado login' to sign back in.")
     elif args.cmd == "config":
         cmd_config(cfg, args)
     else:

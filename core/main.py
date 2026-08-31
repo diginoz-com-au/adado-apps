@@ -303,6 +303,7 @@ def init_db():
         ("subscription_status",     "TEXT DEFAULT 'free'"),
         ("email_address",           "TEXT"),
         ("email_provisioned",       "INTEGER DEFAULT 0"),
+        ("interests",               "TEXT DEFAULT '[]'"),
     ]:
         try:
             db.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
@@ -539,25 +540,31 @@ async def stream_anthropic(messages: list, soul: str, websocket: WebSocket, mode
 async def stream_ollama(messages: list, soul: str, websocket: WebSocket) -> tuple[str, int, int]:
     import httpx
     full = ""
+    # Use native /api/chat endpoint with think:false to suppress qwen3 extended thinking
+    all_messages = [{"role": "system", "content": soul}] + messages
     payload = {
         "model": CLAUDE_MODEL,
-        "messages": [{"role": "system", "content": soul}] + messages,
+        "messages": all_messages,
         "stream": True,
+        "think": False,
+        "options": {"num_ctx": 8192},
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream("POST", f"{OLLAMA_URL}/v1/chat/completions", json=payload) as resp:
+        async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as resp:
             async for line in resp.aiter_lines():
-                if not line or line == "data: [DONE]":
+                if not line:
                     continue
-                if line.startswith("data: "):
-                    try:
-                        chunk_data = json.loads(line[6:])
-                        delta = chunk_data["choices"][0]["delta"].get("content", "")
-                        if delta:
-                            full += delta
-                            await websocket.send_json({"type": "chunk", "content": delta})
-                    except Exception:
-                        pass
+                try:
+                    chunk_data = json.loads(line)
+                    # Native Ollama format: {"message": {"content": "..."}, "done": bool}
+                    delta = chunk_data.get("message", {}).get("content", "")
+                    if delta:
+                        full += delta
+                        await websocket.send_json({"type": "chunk", "content": delta})
+                    if chunk_data.get("done"):
+                        break
+                except Exception:
+                    pass
     # Estimate tokens for local models (free, but track volume)
     input_tok  = sum(_estimate_tokens(m.get("content", "")) for m in messages) + _estimate_tokens(soul)
     output_tok = _estimate_tokens(full)
@@ -655,6 +662,28 @@ async def cli_login(req: LoginRequest):
         "onboarding_complete": bool(user["onboarding_complete"]),
     }
 
+@app.post("/api/auth/refresh")
+async def refresh_token(request: Request):
+    """
+    Silently rotate a JWT before it expires.
+    Client should call this when token has < 7 days left.
+    Returns a fresh 30-day token without requiring password re-entry.
+    """
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_data["sub"],)).fetchone()
+    db.close()
+    if not user:
+        raise HTTPException(401, "User not found")
+    new_token = make_token(user["id"], user["email"])
+    return {
+        "token": new_token,
+        "expires_in": 86400 * 30,
+        "message": "Token refreshed",
+    }
+
 @app.get("/api/auth/me")
 async def get_me(request: Request):
     user_data = get_auth_user(request)
@@ -678,6 +707,8 @@ async def get_me(request: Request):
         "trial_days_left": max(0, int((trial_ends - time.time()) / 86400)) if trial_ends else 0,
         "onboarding_complete": bool(user["onboarding_complete"]),
         "onboarding_data": onboarding,
+        "token_exp": user_data.get("exp"),
+        "token_days_left": max(0, int((user_data.get("exp", 0) - time.time()) / 86400)),
     }
 
 @app.get("/api/auth/export")
@@ -757,6 +788,27 @@ async def get_app(app_id: str):
 async def get_app_registry():
     """Returns all apps including agent metadata for the frontend registry."""
     return load_apps(include_core=True)
+
+@app.post("/api/apps/install-interests")
+async def install_interests(request: Request):
+    """Save the user's selected interests and mark onboarding complete."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    interests = body.get("interests", [])
+    if not isinstance(interests, list):
+        raise HTTPException(400, "interests must be a list")
+    import json as _json
+    uid = user_data["sub"]
+    db = get_db()
+    db.execute(
+        "UPDATE users SET interests = ?, onboarding_complete = 1 WHERE id = ?",
+        (_json.dumps(interests), uid)
+    )
+    db.commit()
+    db.close()
+    return {"ok": True, "interests": interests}
 
 @app.get("/api/agents")
 async def get_agents():
@@ -2661,6 +2713,10 @@ async def payment_status(request: Request):
     if not user:
         raise HTTPException(404, "User not found")
 
+    # If Stripe is not configured, treat everyone as active (MVP/trial mode)
+    if not STRIPE_SECRET_KEY:
+        return {"status": "trialing", "plan": "trial", "next_billing_date": None, "card_last4": None}
+
     status     = user["subscription_status"] or "free"
     sub_id     = user["stripe_subscription_id"]
     next_bill  = None
@@ -2838,6 +2894,9 @@ async def email_status(request: Request):
         (uid,)
     ).fetchall()
     db.close()
+    # If Fastmail not configured, treat email as provisioned so the overlay never fires
+    if not FASTMAIL_API_TOKEN or not FASTMAIL_ACCOUNT_ID:
+        return {"provisioned": True, "email_address": None, "forwards": []}
     return {
         "provisioned": bool(user and user["email_provisioned"]),
         "email_address": user["email_address"] if user else None,
@@ -2845,11 +2904,300 @@ async def email_status(request: Request):
     }
 
 
+# ─── Support chat (pre-auth, public) ─────────────────────────────────────────
+
+import re as _re
+
+# In-memory rate limiter: {ip: [timestamp, ...]}
+_support_rate: dict[str, list] = {}
+_SUPPORT_LIMIT = 20       # requests
+_SUPPORT_WINDOW = 3600    # 1 hour in seconds
+
+# In-memory session history: {session_id: [{"role": ..., "content": ...}, ...]}
+_support_sessions: dict[str, list] = {}
+_SUPPORT_SESSION_MAX = 20  # max messages to keep per session
+
+# Plane config (for ticket creation)
+_PLANE_API_KEY  = os.getenv("PLANE_API_KEY", "plane_api_716deab5290c427eb03cd54b87a3b6e5")
+_PLANE_BASE_URL = os.getenv("PLANE_API_HOST_URL", "http://100.127.152.116:9210")
+_PLANE_WORKSPACE = os.getenv("PLANE_WORKSPACE_SLUG", "diginoz")
+_PLANE_PROJECT_ID = "644b9571-3eba-414e-bf6b-ed16012d86d0"
+
+# Escalation log path (Ada monitors this)
+_ESCALATION_LOG = Path("/data/support-escalations.log")
+
+_SUPPORT_SYSTEM = """You are Ada, AdaDo's support assistant. You help new and existing users with:
+- Signup and onboarding issues
+- Payment and subscription problems
+- App installation and configuration
+- Account access issues
+- General questions about what AdaDo does
+
+AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, every app included (email, tasks, calendar, files, and more).
+
+CRITICAL PRIVACY RULE: You are a public-facing support agent. You have absolutely NO access to any user's personal data, email address, name, or account information. You do NOT know who this person is. Never mention, guess, or reveal any email address or name. Never say "you're on [email]" or "I can see your account". Treat every person as a completely anonymous visitor. If you find yourself about to write an email address, stop and remove it.
+
+You are warm, fast, and competent. You fix things — you don't just explain them.
+
+For any action that would require infrastructure changes, data deletion, or system modifications, say: "I'll escalate this to our support team — you'll hear back at ada@diginoz.com.au." and include this exact tag at the end of your reply:
+<ESCALATE>brief description of what needs admin action</ESCALATE>"""
+
+# Problem signal words for Python-side ticket classification
+_PROBLEM_KEYWORDS = [
+    "error", "500", "404", "fail", "failed", "failing", "can't", "cannot",
+    "can not", "couldn't", "issue", "problem", "broken", "not working",
+    "doesn't work", "won't", "won't load", "didn't receive", "never arrived",
+    "never got", "bug", "crash", "crashed", "stuck", "locked out", "blocked",
+    "denied", "rejected", "wrong", "missing", "lost", "disappeared",
+    "charged", "billed", "double charged", "refund", "payment", "declined",
+    "login", "sign in", "signin", "signup", "sign up", "password", "reset",
+    "account", "access", "unauthorized", "forbidden", "timeout", "slow",
+    "not loading", "blank", "white screen", "keeps", "every time",
+]
+
+_ESCALATE_KEYWORDS = [
+    "delete my account", "delete account", "delete all my data", "remove my data",
+    "ban", "legal", "gdpr", "privacy request", "data export", "server",
+    "infrastructure", "database", "admin", "backdoor", "manual override",
+]
+
+
+def _classify_support_message(user_msg: str, assistant_reply: str) -> tuple[bool, bool, str, str]:
+    """
+    Classify whether to create a ticket and/or escalate.
+    Returns: (should_ticket, should_escalate, severity, title)
+    """
+    msg_lower = user_msg.lower()
+    reply_lower = assistant_reply.lower()
+
+    is_problem = any(kw in msg_lower for kw in _PROBLEM_KEYWORDS)
+    is_escalate = any(kw in msg_lower for kw in _ESCALATE_KEYWORDS)
+
+    # Don't ticket if the reply suggests it's not a real problem
+    if not is_problem:
+        return False, is_escalate, "low", ""
+
+    # Determine severity
+    if any(kw in msg_lower for kw in ["can't access", "locked out", "can't log in", "can't login", "blocked", "urgent", "outage", "down"]):
+        severity = "high"
+    elif any(kw in msg_lower for kw in ["error", "500", "crash", "failed", "not working", "broken"]):
+        severity = "medium"
+    elif any(kw in msg_lower for kw in ["payment", "charged", "billed", "refund", "double"]):
+        severity = "high"
+    else:
+        severity = "low"
+
+    # Build a brief title from first 80 chars of problem description
+    title = user_msg.strip()[:80].replace("\n", " ")
+    if len(user_msg) > 80:
+        title = title.rstrip() + "..."
+
+    return True, is_escalate, severity, title
+
+
+async def _create_plane_ticket(title: str, severity: str, resolved: bool, summary: str, session_id: str, history: list) -> str | None:
+    """Create a Plane issue and return the readable identifier (e.g. ADADO-42)."""
+    try:
+        import httpx
+        # Build description with conversation history
+        convo_lines = []
+        for m in history:
+            role = "User" if m["role"] == "user" else "Ada"
+            convo_lines.append(f"**{role}:** {m['content'][:500]}")
+        convo_text = "\n\n".join(convo_lines)
+
+        description = (
+            f"**Severity:** {severity}\n"
+            f"**Status:** {'Resolved' if resolved else 'Unresolved'}\n"
+            f"**Session ID:** {session_id}\n\n"
+            f"**Summary:** {summary}\n\n"
+            f"---\n\n**Conversation:**\n\n{convo_text}"
+        )
+
+        headers = {
+            "X-API-Key": _PLANE_API_KEY,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "name": title,
+            "description_html": f"<p>{description.replace(chr(10), '<br>')}</p>",
+            "priority": {"low": "low", "medium": "medium", "high": "high", "critical": "urgent"}.get(severity, "medium"),
+        }
+        url = f"{_PLANE_BASE_URL}/api/v1/workspaces/{_PLANE_WORKSPACE}/projects/{_PLANE_PROJECT_ID}/issues/"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code in (200, 201):
+                data = r.json()
+                seq = data.get("sequence_id", "?")
+                return f"ADADO-{seq}"
+    except Exception:
+        pass
+    return None
+
+
+def _log_escalation(issue: str, user: str, session_id: str):
+    """Append an escalation entry to the escalation log."""
+    try:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        line = f"[{ts}] Support escalation — Session: {session_id} | User: {user or 'unknown'} | Issue: {issue}\n"
+        _ESCALATION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(_ESCALATION_LOG, "a") as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
+class SupportChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
+
+@app.post("/api/support/chat")
+async def support_chat(req: SupportChatRequest, request: Request):
+    # Rate limit by IP
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    hits = _support_rate.get(ip, [])
+    hits = [t for t in hits if now - t < _SUPPORT_WINDOW]
+    if len(hits) >= _SUPPORT_LIMIT:
+        raise HTTPException(429, "Too many requests — please try again later.")
+    hits.append(now)
+    _support_rate[ip] = hits
+
+    msg = req.message.strip()[:2000]
+    if not msg:
+        raise HTTPException(400, "Empty message")
+
+    session_id = req.session_id.strip()[:64] or secrets.token_hex(8)
+
+    # Load or create session history
+    history = _support_sessions.get(session_id, [])
+    history.append({"role": "user", "content": msg})
+
+    # Trim to max window
+    if len(history) > _SUPPORT_SESSION_MAX:
+        history = history[-_SUPPORT_SESSION_MAX:]
+
+    raw_reply = ""
+
+    # Support chat inference — uses Anthropic via proxy (Ollama too slow on CPU-only host)
+    try:
+        import anthropic as _anthro
+        _proxy = CLAUDE_PROXY_URL or (
+            "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+        )
+        if _proxy:
+            _aclient = _anthro.AsyncAnthropic(api_key="proxy", base_url=_proxy)
+        elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+            _aclient = _anthro.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+        else:
+            _aclient = _anthro.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        _resp = await _aclient.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=_SUPPORT_SYSTEM,
+            messages=history,
+        )
+        raw_reply = _resp.content[0].text if _resp.content else "Sorry, I couldn't respond right now."
+    except Exception as e:
+        raw_reply = f"Hi! I'm having a brief technical hiccup. Please try again in a moment, or email ada@diginoz.com.au if this keeps happening."
+
+    # Post-process: strip any email addresses that leaked through (proxy may inject context)
+    raw_reply = _re.sub(r'\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b', '[email protected]', raw_reply)
+
+    # Parse ESCALATE tag from reply (model-driven for admin-action cases)
+    escalated = False
+    esc_match = _re.search(r'<ESCALATE[^>]*>(.*?)</ESCALATE>', raw_reply, _re.DOTALL)
+    if esc_match:
+        esc_issue = esc_match.group(1).strip()
+        _log_escalation(issue=esc_issue, user="anonymous", session_id=session_id)
+        escalated = True
+        raw_reply = _re.sub(r"\s*<ESCALATE[^>]*>.*?</ESCALATE>", "", raw_reply, flags=_re.DOTALL).strip()
+
+    # Save assistant turn to history
+    history.append({"role": "assistant", "content": raw_reply})
+    _support_sessions[session_id] = history
+
+    # Python-side ticket classification (no extra API call needed)
+    ticket_id = None
+    should_ticket, should_escalate_py, severity, title = _classify_support_message(msg, raw_reply)
+    if should_ticket:
+        summary = f"User reported: {msg[:300]}"
+        ticket_id = await _create_plane_ticket(
+            title=title,
+            severity=severity,
+            resolved=False,
+            summary=summary,
+            session_id=session_id,
+            history=history,
+        )
+    if should_escalate_py and not escalated:
+        _log_escalation(issue=msg[:200], user="", session_id=session_id)
+        escalated = True
+
+    result: dict = {"reply": raw_reply, "session_id": session_id}
+    if ticket_id:
+        result["ticket_id"] = ticket_id
+        result["reply"] = raw_reply + f"\n\n*Issue {ticket_id} created for tracking.*"
+    if escalated:
+        result["escalated"] = True
+
+    return result
+
+
 # ─── Static / UI ──────────────────────────────────────────────────────────────
 
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# ─── Maintenance banner ───────────────────────────────────────────────────────
+
+_MAINTENANCE_FILE = Path("/data/maintenance.json")
+
+def _read_maintenance() -> dict:
+    try:
+        if _MAINTENANCE_FILE.exists():
+            import json as _json
+            return _json.loads(_MAINTENANCE_FILE.read_text())
+    except Exception:
+        pass
+    return {"active": False, "message": "", "level": "info"}
+
+def _write_maintenance(data: dict):
+    try:
+        import json as _json
+        _MAINTENANCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _MAINTENANCE_FILE.write_text(_json.dumps(data))
+    except Exception:
+        pass
+
+@app.get("/api/maintenance")
+async def get_maintenance():
+    return _read_maintenance()
+
+class MaintenanceRequest(BaseModel):
+    active: bool = True
+    message: str = ""
+    level: str = "info"  # info | warning | error
+
+@app.post("/api/maintenance")
+async def set_maintenance(req: MaintenanceRequest, request: Request):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    data = {"active": req.active, "message": req.message, "level": req.level}
+    _write_maintenance(data)
+    return data
+
+@app.delete("/api/maintenance")
+async def clear_maintenance(request: Request):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    _write_maintenance({"active": False, "message": "", "level": "info"})
+    return {"active": False}
+
+# ─── robots / sitemap ─────────────────────────────────────────────────────────
 
 @app.get("/robots.txt", include_in_schema=False)
 async def robots():
