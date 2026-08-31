@@ -2,6 +2,7 @@ id: adado-analytics
 chat_endpoint: /ws/chat?agent=analytics-agent
 name: Analytics
 description: Let Ada pull traffic stats and audience insights from Plausible — privacy-first website analytics.
+short_description: "Privacy-first traffic & audience insights"
 category: marketing
 market_leader: "Plausible"
 homepage_tile: true

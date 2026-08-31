@@ -2,6 +2,7 @@ id: adado-vpn
 chat_endpoint: /ws/chat?agent=vpn-agent
 name: VPN
 description: Let Ada manage peer access and check network status in Tailscale — zero-config WireGuard mesh VPN.
+short_description: "Zero-config secure mesh network"
 category: security
 market_leader: "Tailscale"
 homepage_tile: true

@@ -2,6 +2,7 @@ id: adado-inbox
 chat_endpoint: /ws/chat?agent=inbox-agent
 name: AdaDo Inbox
 description: Let Ada handle customer queries across email, live chat, and social in Chatwoot — no support ticket left unseen.
+short_description: "Customer support across all channels"
 category: customer support
 market_leader: "Chatwoot"
 homepage_tile: true
