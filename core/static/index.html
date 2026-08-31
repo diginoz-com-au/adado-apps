@@ -1147,15 +1147,55 @@
       <label>Password</label>
       <input type="password" id="pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAuth()">
     </div>
+    <div class="field" id="terms-field" style="display:none;margin-bottom:0.5rem">
+      <label style="display:flex;align-items:flex-start;gap:0.5rem;font-size:0.83rem;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="terms-check" style="margin-top:2px;flex-shrink:0">
+        I agree to the <a href="/terms" target="_blank" style="color:var(--accent)">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:var(--accent)">Privacy Policy</a>
+      </label>
+    </div>
     <div class="modal-err" id="auth-err"></div>
     <button class="modal-btn" onclick="doAuth()" id="auth-submit">Sign in</button>
     <div class="modal-switch">
       <span id="auth-switch-text">Don't have an account?</span>
       <a onclick="toggleAuth()" id="auth-switch-link">Create one</a>
     </div>
-    <div style="text-align:center;margin-top:0.75rem">
+    <div style="text-align:center;margin-top:0.5rem">
+      <a onclick="showForgotPassword()" id="forgot-link" style="font-size:0.81rem;color:var(--muted);cursor:pointer">Forgot password?</a>
+    </div>
+    <div style="text-align:center;margin-top:0.5rem">
       <a onclick="closeAuth()" style="font-size:0.81rem;color:var(--muted);cursor:pointer">Continue as guest</a>
     </div>
+  </div>
+</div>
+
+<!-- Forgot password modal -->
+<div class="modal-overlay" id="forgot-modal" style="display:none">
+  <div class="auth-modal">
+    <h2>Reset password</h2>
+    <p id="forgot-sub">Enter your email and we'll send a reset link.</p>
+    <div class="field" id="forgot-email-field">
+      <label>Email</label>
+      <input type="email" id="forgot-email-input" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doForgotPassword()">
+    </div>
+    <div class="modal-err" id="forgot-err"></div>
+    <button class="modal-btn" onclick="doForgotPassword()" id="forgot-submit">Send reset link</button>
+    <div style="text-align:center;margin-top:0.75rem">
+      <a onclick="closeForgotPassword()" style="font-size:0.81rem;color:var(--muted);cursor:pointer">Back to sign in</a>
+    </div>
+  </div>
+</div>
+
+<!-- Reset password modal (shown when ?token= is in URL) -->
+<div class="modal-overlay" id="reset-modal" style="display:none">
+  <div class="auth-modal">
+    <h2>New password</h2>
+    <p>Choose a new password for your account.</p>
+    <div class="field">
+      <label>New password</label>
+      <input type="password" id="reset-pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doResetPassword()">
+    </div>
+    <div class="modal-err" id="reset-err"></div>
+    <button class="modal-btn" onclick="doResetPassword()" id="reset-submit">Set new password</button>
   </div>
 </div>
 
@@ -1321,6 +1361,14 @@ function renderMarkdown(text) {
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Handle password reset link: /reset-password?token=...  OR  /?token=...
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get('token');
+  if (resetToken && (window.location.pathname === '/reset-password' || window.location.pathname === '/')) {
+    document.getElementById('reset-modal').style.display = 'flex';
+    document.getElementById('reset-pw-input').focus();
+    return; // don't init app until reset is done
+  }
   loadApps();
   updateAuthUI();
   connectWS();
@@ -2054,8 +2102,69 @@ function toggleAuth() {
   document.getElementById('auth-sub').textContent         = isSignup ? 'Set up your AdaDo account.' : 'Your AI assistant is waiting.';
   document.getElementById('auth-submit').textContent      = isSignup ? 'Create account' : 'Sign in';
   document.getElementById('name-field').style.display     = isSignup ? 'block' : 'none';
+  document.getElementById('terms-field').style.display    = isSignup ? 'block' : 'none';
+  document.getElementById('forgot-link').style.display    = isSignup ? 'none' : 'inline';
   document.getElementById('auth-switch-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
   document.getElementById('auth-switch-link').textContent = isSignup ? 'Sign in' : 'Create one';
+}
+
+function showForgotPassword() {
+  document.getElementById('auth-modal').style.display = 'none';
+  document.getElementById('forgot-modal').style.display = 'flex';
+  document.getElementById('forgot-email-input').value = document.getElementById('email-input').value;
+  document.getElementById('forgot-email-input').focus();
+}
+
+function closeForgotPassword() {
+  document.getElementById('forgot-modal').style.display = 'none';
+  document.getElementById('auth-modal').style.display = 'flex';
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email-input').value.trim();
+  const errEl = document.getElementById('forgot-err');
+  const btn   = document.getElementById('forgot-submit');
+  errEl.textContent = '';
+  if (!email) { errEl.textContent = 'Please enter your email.'; return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await fetch('/api/auth/forgot-password', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    document.getElementById('forgot-email-field').style.display = 'none';
+    btn.style.display = 'none';
+    document.getElementById('forgot-sub').textContent = "If that email is registered, we've sent a reset link. Check your inbox.";
+  } catch(e) {
+    errEl.textContent = 'Something went wrong. Try again.';
+    btn.disabled = false; btn.textContent = 'Send reset link';
+  }
+}
+
+async function doResetPassword() {
+  const password = document.getElementById('reset-pw-input').value;
+  const errEl    = document.getElementById('reset-err');
+  const btn      = document.getElementById('reset-submit');
+  errEl.textContent = '';
+  if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res  = await fetch('/api/auth/reset-password', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ token: urlToken, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Invalid or expired link.'; btn.disabled = false; btn.textContent = 'Set new password'; return; }
+    token = data.token;
+    localStorage.setItem('adado_token', token);
+    document.getElementById('reset-modal').style.display = 'none';
+    window.history.replaceState({}, '', '/');
+    initApp();
+  } catch(e) {
+    errEl.textContent = 'Something went wrong. Try again.';
+    btn.disabled = false; btn.textContent = 'Set new password';
+  }
 }
 
 async function doAuth() {
@@ -2065,6 +2174,9 @@ async function doAuth() {
   const errEl    = document.getElementById('auth-err');
   errEl.textContent = '';
   if (!email || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
+  if (isSignup && !document.getElementById('terms-check').checked) {
+    errEl.textContent = 'Please agree to the Terms of Service and Privacy Policy.'; return;
+  }
   try {
     const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
     const body     = isSignup ? { email, password, name } : { email, password };

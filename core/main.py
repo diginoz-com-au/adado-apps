@@ -4,6 +4,9 @@ FastAPI server: auth, onboarding, WebSocket chat, app tiles.
 Supports Anthropic API (sk-ant-* key) or Ollama (local, free).
 """
 import os, json, sqlite3, hashlib, secrets, time, yaml, bcrypt
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Optional, List
 
@@ -314,6 +317,18 @@ def init_db():
         db.execute("ALTER TABLE sessions ADD COLUMN status TEXT DEFAULT 'active'")
     except Exception:
         pass
+    # Password reset tokens
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens(token)")
     # Email forwards table
     db.execute("""
         CREATE TABLE IF NOT EXISTS email_forwards (
@@ -340,6 +355,30 @@ def make_token(user_id: int, email: str) -> str:
         {"sub": str(user_id), "email": email, "exp": time.time() + 86400 * 30},
         JWT_SECRET, algorithm="HS256"
     )
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "127.0.0.1")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "1025"))
+SMTP_USER = os.environ.get("SMTP_USER", "dan@diginoz.com.au")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "ada@diginoz.com.au")
+APP_URL = os.environ.get("APP_URL", "https://adado.diginoz.com.au")
+
+def send_email(to: str, subject: str, html_body: str) -> bool:
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"AdaDo <{FROM_EMAIL}>"
+        msg["To"] = to
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
+            s.starttls()
+            if SMTP_PASS:
+                s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(FROM_EMAIL, [to], msg.as_string())
+        return True
+    except Exception as e:
+        print(f"[email] send failed to {to}: {e}")
+        return False
 
 def verify_token(token: str) -> Optional[dict]:
     try:
@@ -690,6 +729,64 @@ async def refresh_token(request: Request):
         "expires_in": 86400 * 30,
         "message": "Token refreshed",
     }
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    db = get_db()
+    user = db.execute("SELECT id, name FROM users WHERE email = ?", (req.email.lower(),)).fetchone()
+    # Always return 200 — don't reveal whether email exists
+    if user:
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = int(time.time()) + 86400  # 24 hours
+        db.execute(
+            "INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (user["id"], reset_token, expires_at, int(time.time()))
+        )
+        db.commit()
+        reset_url = f"{APP_URL}/reset-password?token={reset_token}"
+        send_email(
+            req.email.lower(),
+            "Reset your AdaDo password",
+            f"""
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
+              <h2 style="color:#7c3aed">Reset your password</h2>
+              <p>Hi {user['name']},</p>
+              <p>Click the button below to reset your AdaDo password. This link expires in 24 hours.</p>
+              <a href="{reset_url}" style="display:inline-block;background:#7c3aed;color:#fff;padding:0.75rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:600;margin:1rem 0">Reset password</a>
+              <p style="color:#888;font-size:0.85rem">If you didn't request this, ignore this email — your password won't change.</p>
+              <p style="color:#888;font-size:0.85rem">Link: {reset_url}</p>
+            </div>
+            """
+        )
+    db.close()
+    return {"ok": True, "message": "If that email is registered, a reset link has been sent."}
+
+@app.post("/api/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    if len(req.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0 AND expires_at > ?",
+        (req.token, int(time.time()))
+    ).fetchone()
+    if not row:
+        db.close()
+        raise HTTPException(400, "Invalid or expired reset link")
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(req.password), row["user_id"]))
+    db.execute("UPDATE password_reset_tokens SET used = 1 WHERE id = ?", (row["id"],))
+    db.commit()
+    user = db.execute("SELECT email FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    db.close()
+    token = make_token(row["user_id"], user["email"])
+    return {"ok": True, "token": token, "message": "Password updated. You are now signed in."}
 
 @app.get("/api/auth/me")
 async def get_me(request: Request):
