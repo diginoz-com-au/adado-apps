@@ -2878,40 +2878,60 @@ AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, every
 
 You are warm, fast, and competent. You fix things — you don't just explain them.
 
-You have two tools available:
-- track_issue: Call this whenever the user reports a specific problem (error, login failure, payment issue, etc.). Use severity=critical for outages, high for blocked users, medium for errors, low for minor issues. Set resolved=true only when the user confirms their problem is fixed.
-- escalate_to_admin: Call this when an action requires infrastructure changes, data deletion, or system modifications. Also say: "I need to check with Dan before doing that — I'll escalate this now."
+For any action that would require infrastructure changes, data deletion, or system modifications, say: "I need to check with Dan before doing that — I'll escalate this now." and include this exact tag at the end of your reply:
+<ESCALATE user="USER_EMAIL_OR_UNKNOWN">brief description of what needs admin action</ESCALATE>"""
 
-For pure general questions with no reported problem, do not call any tools."""
-
-_SUPPORT_TOOLS = [
-    {
-        "name": "track_issue",
-        "description": "Track a user-reported issue or problem in the support system.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Brief, specific issue title (max 80 chars)"},
-                "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
-                "resolved": {"type": "boolean", "description": "True only if user confirmed the problem is fixed"},
-                "summary": {"type": "string", "description": "What the user reported and what was advised"},
-            },
-            "required": ["title", "severity", "resolved", "summary"],
-        },
-    },
-    {
-        "name": "escalate_to_admin",
-        "description": "Escalate an issue requiring admin action to Dan.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "issue": {"type": "string", "description": "What needs Dan's approval or action"},
-                "user": {"type": "string", "description": "User email if known, else empty string"},
-            },
-            "required": ["issue", "user"],
-        },
-    },
+# Problem signal words for Python-side ticket classification
+_PROBLEM_KEYWORDS = [
+    "error", "500", "404", "fail", "failed", "failing", "can't", "cannot",
+    "can not", "couldn't", "issue", "problem", "broken", "not working",
+    "doesn't work", "won't", "won't load", "didn't receive", "never arrived",
+    "never got", "bug", "crash", "crashed", "stuck", "locked out", "blocked",
+    "denied", "rejected", "wrong", "missing", "lost", "disappeared",
+    "charged", "billed", "double charged", "refund", "payment", "declined",
+    "login", "sign in", "signin", "signup", "sign up", "password", "reset",
+    "account", "access", "unauthorized", "forbidden", "timeout", "slow",
+    "not loading", "blank", "white screen", "keeps", "every time",
 ]
+
+_ESCALATE_KEYWORDS = [
+    "delete my account", "delete account", "delete all my data", "remove my data",
+    "ban", "legal", "gdpr", "privacy request", "data export", "server",
+    "infrastructure", "database", "admin", "backdoor", "manual override",
+]
+
+
+def _classify_support_message(user_msg: str, assistant_reply: str) -> tuple[bool, bool, str, str]:
+    """
+    Classify whether to create a ticket and/or escalate.
+    Returns: (should_ticket, should_escalate, severity, title)
+    """
+    msg_lower = user_msg.lower()
+    reply_lower = assistant_reply.lower()
+
+    is_problem = any(kw in msg_lower for kw in _PROBLEM_KEYWORDS)
+    is_escalate = any(kw in msg_lower for kw in _ESCALATE_KEYWORDS)
+
+    # Don't ticket if the reply suggests it's not a real problem
+    if not is_problem:
+        return False, is_escalate, "low", ""
+
+    # Determine severity
+    if any(kw in msg_lower for kw in ["can't access", "locked out", "can't log in", "can't login", "blocked", "urgent", "outage", "down"]):
+        severity = "high"
+    elif any(kw in msg_lower for kw in ["error", "500", "crash", "failed", "not working", "broken"]):
+        severity = "medium"
+    elif any(kw in msg_lower for kw in ["payment", "charged", "billed", "refund", "double"]):
+        severity = "high"
+    else:
+        severity = "low"
+
+    # Build a brief title from first 80 chars of problem description
+    title = user_msg.strip()[:80].replace("\n", " ")
+    if len(user_msg) > 80:
+        title = title.rstrip() + "..."
+
+    return True, is_escalate, severity, title
 
 
 async def _create_plane_ticket(title: str, severity: str, resolved: bool, summary: str, session_id: str, history: list) -> str | None:
@@ -2997,7 +3017,6 @@ async def support_chat(req: SupportChatRequest, request: Request):
         history = history[-_SUPPORT_SESSION_MAX:]
 
     raw_reply = ""
-    tool_calls: list[dict] = []
 
     if USE_ANTHROPIC:
         try:
@@ -3013,19 +3032,11 @@ async def support_chat(req: SupportChatRequest, request: Request):
                 client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
             resp = await client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=800,
+                max_tokens=600,
                 system=_SUPPORT_SYSTEM,
-                tools=_SUPPORT_TOOLS,
                 messages=history,
             )
-            # Extract text reply and any tool_use blocks
-            for block in resp.content:
-                if block.type == "text":
-                    raw_reply += block.text
-                elif block.type == "tool_use":
-                    tool_calls.append({"name": block.name, "input": block.input})
-            if not raw_reply:
-                raw_reply = "Sorry, I couldn't respond right now."
+            raw_reply = resp.content[0].text if resp.content else "Sorry, I couldn't respond right now."
         except Exception as e:
             raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
     else:
@@ -3043,56 +3054,44 @@ async def support_chat(req: SupportChatRequest, request: Request):
                 r = await client.post(f"{OLLAMA_URL}/v1/chat/completions", json=payload)
                 data = r.json()
                 raw_reply = data["choices"][0]["message"]["content"]
-            # Ollama path: parse legacy XML blocks as fallback
-            ticket_match = _re.search(r"<TICKET>(.*?)</TICKET>", raw_reply, _re.DOTALL)
-            if ticket_match:
-                try:
-                    td = json.loads(ticket_match.group(1).strip())
-                    tool_calls.append({"name": "track_issue", "input": td})
-                except Exception:
-                    pass
-            esc_match = _re.search(r"<ESCALATE>(.*?)</ESCALATE>", raw_reply, _re.DOTALL)
-            if esc_match:
-                try:
-                    ed = json.loads(esc_match.group(1).strip())
-                    tool_calls.append({"name": "escalate_to_admin", "input": ed})
-                except Exception:
-                    pass
-            raw_reply = _re.sub(r"\s*<(?:TICKET|ESCALATE)>.*?</(?:TICKET|ESCALATE)>", "", raw_reply, flags=_re.DOTALL).strip()
         except Exception as e:
             raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
 
-    # Save assistant turn to history (text only — tool_use blocks not stored in history)
+    # Parse ESCALATE tag from reply (model-driven for admin-action cases)
+    escalated = False
+    esc_match = _re.search(r'<ESCALATE(?:\s+user="([^"]*)")?>(.*?)</ESCALATE>', raw_reply, _re.DOTALL)
+    if esc_match:
+        esc_user = esc_match.group(1) or ""
+        esc_issue = esc_match.group(2).strip()
+        _log_escalation(issue=esc_issue, user=esc_user, session_id=session_id)
+        escalated = True
+        raw_reply = _re.sub(r"\s*<ESCALATE[^>]*>.*?</ESCALATE>", "", raw_reply, flags=_re.DOTALL).strip()
+
+    # Save assistant turn to history
     history.append({"role": "assistant", "content": raw_reply})
     _support_sessions[session_id] = history
 
-    # Process tool calls
+    # Python-side ticket classification (no extra API call needed)
     ticket_id = None
-    escalated = False
-    for tc in tool_calls:
-        if tc["name"] == "track_issue":
-            inp = tc["input"]
-            ticket_id = await _create_plane_ticket(
-                title=inp.get("title", "Support issue"),
-                severity=inp.get("severity", "medium"),
-                resolved=inp.get("resolved", False),
-                summary=inp.get("summary", ""),
-                session_id=session_id,
-                history=history,
-            )
-        elif tc["name"] == "escalate_to_admin":
-            inp = tc["input"]
-            _log_escalation(
-                issue=inp.get("issue", "Unknown issue"),
-                user=inp.get("user", ""),
-                session_id=session_id,
-            )
-            escalated = True
+    should_ticket, should_escalate_py, severity, title = _classify_support_message(msg, raw_reply)
+    if should_ticket:
+        summary = f"User reported: {msg[:300]}"
+        ticket_id = await _create_plane_ticket(
+            title=title,
+            severity=severity,
+            resolved=False,
+            summary=summary,
+            session_id=session_id,
+            history=history,
+        )
+    if should_escalate_py and not escalated:
+        _log_escalation(issue=msg[:200], user="", session_id=session_id)
+        escalated = True
 
-    result: dict = {"reply": raw_reply.strip(), "session_id": session_id}
+    result: dict = {"reply": raw_reply, "session_id": session_id}
     if ticket_id:
         result["ticket_id"] = ticket_id
-        result["reply"] = raw_reply.strip() + f"\n\n*Issue {ticket_id} created for tracking.*"
+        result["reply"] = raw_reply + f"\n\n*Issue {ticket_id} created for tracking.*"
     if escalated:
         result["escalated"] = True
 
