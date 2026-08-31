@@ -303,6 +303,7 @@ def init_db():
         ("subscription_status",     "TEXT DEFAULT 'free'"),
         ("email_address",           "TEXT"),
         ("email_provisioned",       "INTEGER DEFAULT 0"),
+        ("interests",               "TEXT DEFAULT '[]'"),
     ]:
         try:
             db.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
@@ -787,6 +788,27 @@ async def get_app(app_id: str):
 async def get_app_registry():
     """Returns all apps including agent metadata for the frontend registry."""
     return load_apps(include_core=True)
+
+@app.post("/api/apps/install-interests")
+async def install_interests(request: Request):
+    """Save the user's selected interests and mark onboarding complete."""
+    user_data = get_auth_user(request)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    interests = body.get("interests", [])
+    if not isinstance(interests, list):
+        raise HTTPException(400, "interests must be a list")
+    import json as _json
+    uid = user_data["sub"]
+    db = get_db()
+    db.execute(
+        "UPDATE users SET interests = ?, onboarding_complete = 1 WHERE id = ?",
+        (_json.dumps(interests), uid)
+    )
+    db.commit()
+    db.close()
+    return {"ok": True, "interests": interests}
 
 @app.get("/api/agents")
 async def get_agents():
@@ -2691,6 +2713,10 @@ async def payment_status(request: Request):
     if not user:
         raise HTTPException(404, "User not found")
 
+    # If Stripe is not configured, treat everyone as active (MVP/trial mode)
+    if not STRIPE_SECRET_KEY:
+        return {"status": "trialing", "plan": "trial", "next_billing_date": None, "card_last4": None}
+
     status     = user["subscription_status"] or "free"
     sub_id     = user["stripe_subscription_id"]
     next_bill  = None
@@ -2868,6 +2894,9 @@ async def email_status(request: Request):
         (uid,)
     ).fetchall()
     db.close()
+    # If Fastmail not configured, treat email as provisioned so the overlay never fires
+    if not FASTMAIL_API_TOKEN or not FASTMAIL_ACCOUNT_ID:
+        return {"provisioned": True, "email_address": None, "forwards": []}
     return {
         "provisioned": bool(user and user["email_provisioned"]),
         "email_address": user["email_address"] if user else None,
@@ -2910,7 +2939,7 @@ CRITICAL PRIVACY RULE: You are a public-facing support agent. You have absolutel
 
 You are warm, fast, and competent. You fix things — you don't just explain them.
 
-For any action that would require infrastructure changes, data deletion, or system modifications, say: "I'll escalate this to our support team now." and include this exact tag at the end of your reply:
+For any action that would require infrastructure changes, data deletion, or system modifications, say: "I'll escalate this to our support team — you'll hear back at ada@diginoz.com.au." and include this exact tag at the end of your reply:
 <ESCALATE>brief description of what needs admin action</ESCALATE>"""
 
 # Problem signal words for Python-side ticket classification
@@ -3070,7 +3099,7 @@ async def support_chat(req: SupportChatRequest, request: Request):
         )
         raw_reply = _resp.content[0].text if _resp.content else "Sorry, I couldn't respond right now."
     except Exception as e:
-        raw_reply = f"Hi! I'm having a brief technical hiccup. Please try again in a moment, or email support@adadoai.com if this keeps happening."
+        raw_reply = f"Hi! I'm having a brief technical hiccup. Please try again in a moment, or email ada@diginoz.com.au if this keeps happening."
 
     # Post-process: strip any email addresses that leaked through (proxy may inject context)
     raw_reply = _re.sub(r'\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b', '[email protected]', raw_reply)

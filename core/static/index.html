@@ -1985,7 +1985,7 @@ async function maybeShowPayOverlay() {
     const pay   = payRes.ok   ? await payRes.json()   : {};
     const email = emailRes.ok ? await emailRes.json() : {};
 
-    const needsPay   = !pay.plan || pay.plan === 'free';
+    const needsPay   = !pay.plan || pay.plan === 'free';  // 'trial' and 'pro' both skip payment
     const needsEmail = !email.provisioned;
 
     if (needsPay || needsEmail) {
