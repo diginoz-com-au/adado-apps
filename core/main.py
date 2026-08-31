@@ -2847,20 +2847,124 @@ async def email_status(request: Request):
 
 # ─── Support chat (pre-auth, public) ─────────────────────────────────────────
 
+import re as _re
+
 # In-memory rate limiter: {ip: [timestamp, ...]}
 _support_rate: dict[str, list] = {}
-_SUPPORT_LIMIT = 10       # requests
+_SUPPORT_LIMIT = 20       # requests
 _SUPPORT_WINDOW = 3600    # 1 hour in seconds
 
-_SUPPORT_SYSTEM = (
-    "You are Ada, AdaDo's friendly AI assistant. "
-    "Help visitors with signup questions, explain what AdaDo does, "
-    "and troubleshoot onboarding issues. Be warm, direct, and concise. "
-    "AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, "
-    "every app included (email, tasks, calendar, files, and more). "
-    "If someone is having trouble signing up, walk them through it step by step. "
-    "Never pretend to have information you don't have. Keep replies under 120 words."
-)
+# In-memory session history: {session_id: [{"role": ..., "content": ...}, ...]}
+_support_sessions: dict[str, list] = {}
+_SUPPORT_SESSION_MAX = 20  # max messages to keep per session
+
+# Plane config (for ticket creation)
+_PLANE_API_KEY  = os.getenv("PLANE_API_KEY", "plane_api_716deab5290c427eb03cd54b87a3b6e5")
+_PLANE_BASE_URL = os.getenv("PLANE_API_HOST_URL", "http://100.127.152.116:9210")
+_PLANE_WORKSPACE = os.getenv("PLANE_WORKSPACE_SLUG", "diginoz")
+_PLANE_PROJECT_ID = "644b9571-3eba-414e-bf6b-ed16012d86d0"
+
+# Escalation log path (Ada monitors this)
+_ESCALATION_LOG = Path("/data/support-escalations.log")
+
+_SUPPORT_SYSTEM = """You are Ada, AdaDo's support agent. You help users with:
+- Signup and onboarding issues
+- Payment and subscription problems
+- App installation and configuration
+- Account access issues
+- General questions about what AdaDo does
+
+AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, every app included (email, tasks, calendar, files, and more).
+
+You are warm, fast, and competent. You fix things — you don't just explain them.
+
+You have two tools available:
+- track_issue: Call this whenever the user reports a specific problem (error, login failure, payment issue, etc.). Use severity=critical for outages, high for blocked users, medium for errors, low for minor issues. Set resolved=true only when the user confirms their problem is fixed.
+- escalate_to_admin: Call this when an action requires infrastructure changes, data deletion, or system modifications. Also say: "I need to check with Dan before doing that — I'll escalate this now."
+
+For pure general questions with no reported problem, do not call any tools."""
+
+_SUPPORT_TOOLS = [
+    {
+        "name": "track_issue",
+        "description": "Track a user-reported issue or problem in the support system.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Brief, specific issue title (max 80 chars)"},
+                "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                "resolved": {"type": "boolean", "description": "True only if user confirmed the problem is fixed"},
+                "summary": {"type": "string", "description": "What the user reported and what was advised"},
+            },
+            "required": ["title", "severity", "resolved", "summary"],
+        },
+    },
+    {
+        "name": "escalate_to_admin",
+        "description": "Escalate an issue requiring admin action to Dan.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "issue": {"type": "string", "description": "What needs Dan's approval or action"},
+                "user": {"type": "string", "description": "User email if known, else empty string"},
+            },
+            "required": ["issue", "user"],
+        },
+    },
+]
+
+
+async def _create_plane_ticket(title: str, severity: str, resolved: bool, summary: str, session_id: str, history: list) -> str | None:
+    """Create a Plane issue and return the readable identifier (e.g. ADADO-42)."""
+    try:
+        import httpx
+        # Build description with conversation history
+        convo_lines = []
+        for m in history:
+            role = "User" if m["role"] == "user" else "Ada"
+            convo_lines.append(f"**{role}:** {m['content'][:500]}")
+        convo_text = "\n\n".join(convo_lines)
+
+        description = (
+            f"**Severity:** {severity}\n"
+            f"**Status:** {'Resolved' if resolved else 'Unresolved'}\n"
+            f"**Session ID:** {session_id}\n\n"
+            f"**Summary:** {summary}\n\n"
+            f"---\n\n**Conversation:**\n\n{convo_text}"
+        )
+
+        headers = {
+            "X-API-Key": _PLANE_API_KEY,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "name": title,
+            "description_html": f"<p>{description.replace(chr(10), '<br>')}</p>",
+            "priority": {"low": "low", "medium": "medium", "high": "high", "critical": "urgent"}.get(severity, "medium"),
+        }
+        url = f"{_PLANE_BASE_URL}/api/v1/workspaces/{_PLANE_WORKSPACE}/projects/{_PLANE_PROJECT_ID}/issues/"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code in (200, 201):
+                data = r.json()
+                seq = data.get("sequence_id", "?")
+                return f"ADADO-{seq}"
+    except Exception:
+        pass
+    return None
+
+
+def _log_escalation(issue: str, user: str, session_id: str):
+    """Append an escalation entry to the escalation log."""
+    try:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        line = f"[{ts}] Support escalation — Session: {session_id} | User: {user or 'unknown'} | Issue: {issue}\n"
+        _ESCALATION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(_ESCALATION_LOG, "a") as f:
+            f.write(line)
+    except Exception:
+        pass
+
 
 class SupportChatRequest(BaseModel):
     message: str
@@ -2878,11 +2982,23 @@ async def support_chat(req: SupportChatRequest, request: Request):
     hits.append(now)
     _support_rate[ip] = hits
 
-    msg = req.message.strip()[:1000]
+    msg = req.message.strip()[:2000]
     if not msg:
         raise HTTPException(400, "Empty message")
 
-    reply = ""
+    session_id = req.session_id.strip()[:64] or secrets.token_hex(8)
+
+    # Load or create session history
+    history = _support_sessions.get(session_id, [])
+    history.append({"role": "user", "content": msg})
+
+    # Trim to max window
+    if len(history) > _SUPPORT_SESSION_MAX:
+        history = history[-_SUPPORT_SESSION_MAX:]
+
+    raw_reply = ""
+    tool_calls: list[dict] = []
+
     if USE_ANTHROPIC:
         try:
             import anthropic
@@ -2897,13 +3013,21 @@ async def support_chat(req: SupportChatRequest, request: Request):
                 client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
             resp = await client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=256,
+                max_tokens=800,
                 system=_SUPPORT_SYSTEM,
-                messages=[{"role": "user", "content": msg}],
+                tools=_SUPPORT_TOOLS,
+                messages=history,
             )
-            reply = resp.content[0].text if resp.content else "Sorry, I couldn't respond right now."
+            # Extract text reply and any tool_use blocks
+            for block in resp.content:
+                if block.type == "text":
+                    raw_reply += block.text
+                elif block.type == "tool_use":
+                    tool_calls.append({"name": block.name, "input": block.input})
+            if not raw_reply:
+                raw_reply = "Sorry, I couldn't respond right now."
         except Exception as e:
-            reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
+            raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
     else:
         try:
             import httpx
@@ -2911,18 +3035,68 @@ async def support_chat(req: SupportChatRequest, request: Request):
                 "model": CLAUDE_MODEL,
                 "messages": [
                     {"role": "system", "content": _SUPPORT_SYSTEM},
-                    {"role": "user", "content": msg},
+                    *history,
                 ],
                 "stream": False,
             }
             async with httpx.AsyncClient(timeout=30.0) as client:
                 r = await client.post(f"{OLLAMA_URL}/v1/chat/completions", json=payload)
                 data = r.json()
-                reply = data["choices"][0]["message"]["content"]
+                raw_reply = data["choices"][0]["message"]["content"]
+            # Ollama path: parse legacy XML blocks as fallback
+            ticket_match = _re.search(r"<TICKET>(.*?)</TICKET>", raw_reply, _re.DOTALL)
+            if ticket_match:
+                try:
+                    td = json.loads(ticket_match.group(1).strip())
+                    tool_calls.append({"name": "track_issue", "input": td})
+                except Exception:
+                    pass
+            esc_match = _re.search(r"<ESCALATE>(.*?)</ESCALATE>", raw_reply, _re.DOTALL)
+            if esc_match:
+                try:
+                    ed = json.loads(esc_match.group(1).strip())
+                    tool_calls.append({"name": "escalate_to_admin", "input": ed})
+                except Exception:
+                    pass
+            raw_reply = _re.sub(r"\s*<(?:TICKET|ESCALATE)>.*?</(?:TICKET|ESCALATE)>", "", raw_reply, flags=_re.DOTALL).strip()
         except Exception as e:
-            reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
+            raw_reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
 
-    return {"reply": reply}
+    # Save assistant turn to history (text only — tool_use blocks not stored in history)
+    history.append({"role": "assistant", "content": raw_reply})
+    _support_sessions[session_id] = history
+
+    # Process tool calls
+    ticket_id = None
+    escalated = False
+    for tc in tool_calls:
+        if tc["name"] == "track_issue":
+            inp = tc["input"]
+            ticket_id = await _create_plane_ticket(
+                title=inp.get("title", "Support issue"),
+                severity=inp.get("severity", "medium"),
+                resolved=inp.get("resolved", False),
+                summary=inp.get("summary", ""),
+                session_id=session_id,
+                history=history,
+            )
+        elif tc["name"] == "escalate_to_admin":
+            inp = tc["input"]
+            _log_escalation(
+                issue=inp.get("issue", "Unknown issue"),
+                user=inp.get("user", ""),
+                session_id=session_id,
+            )
+            escalated = True
+
+    result: dict = {"reply": raw_reply.strip(), "session_id": session_id}
+    if ticket_id:
+        result["ticket_id"] = ticket_id
+        result["reply"] = raw_reply.strip() + f"\n\n*Issue {ticket_id} created for tracking.*"
+    if escalated:
+        result["escalated"] = True
+
+    return result
 
 
 # ─── Static / UI ──────────────────────────────────────────────────────────────
