@@ -1,6 +1,6 @@
 # =============================================================================
 #  AdaDo Installer (PowerShell)
-#  Usage: powershell -NoProfile -ExecutionPolicy Bypass -Command "& { iex ((New-Object System.Net.WebClient).DownloadString('https://adado.diginoz.com.au/install.ps1')) }"
+#  Usage: powershell -NoProfile -ExecutionPolicy Bypass -Command "& { iex ((New-Object System.Net.WebClient).DownloadString('https://adadoai.com/install.ps1')) }"
 # =============================================================================
 
 param(

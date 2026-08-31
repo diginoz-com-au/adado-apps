@@ -1,10 +1,10 @@
 #!/bin/bash
 # AdaDo CLI installer — Linux / macOS
-# Usage: curl -sL https://adado.diginoz.com.au/install-cli.sh | bash
+# Usage: curl -sL https://adadoai.com/install-cli.sh | bash
 
 set -e
 
-ADO_URL="https://adado.diginoz.com.au"
+ADO_URL="https://adadoai.com"
 INSTALL_DIR="/usr/local/bin"
 SCRIPT_URL="$ADO_URL/ado.py"
 FALLBACK_URL="https://github.com/diginoz-com-au/adado-cli/releases/latest/download/ado.py"

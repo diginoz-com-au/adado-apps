@@ -22,7 +22,7 @@ from urllib.parse import urlencode
 
 CONFIG_DIR  = Path.home() / ".ado"
 CONFIG_FILE = CONFIG_DIR / "config.json"
-INSTANCE_DEFAULT = "https://adado.diginoz.com.au"
+INSTANCE_DEFAULT = "https://adadoai.com"
 
 PURPLE  = "\033[38;5;99m"
 LPURPLE = "\033[38;5;141m"

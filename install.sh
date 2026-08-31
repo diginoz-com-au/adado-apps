@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  AdaDo Installer
-#  Usage: curl -fsSL https://adado.diginoz.com.au/install.sh | bash
+#  Usage: curl -fsSL https://adadoai.com/install.sh | bash
 # =============================================================================
 set -euo pipefail
 

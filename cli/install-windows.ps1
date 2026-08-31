@@ -1,8 +1,8 @@
 # AdaDo CLI installer — Windows (PowerShell)
-# Usage: irm https://adado.diginoz.com.au/install-cli.ps1 | iex
+# Usage: irm https://adadoai.com/install-cli.ps1 | iex
 
 $ErrorActionPreference = "Stop"
-$ADO_URL = "https://adado.diginoz.com.au"
+$ADO_URL = "https://adadoai.com"
 $INSTALL_DIR = "$env:LOCALAPPDATA\ado"
 $SCRIPT_URL = "$ADO_URL/cli/ado.py"
 

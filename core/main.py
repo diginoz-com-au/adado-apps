@@ -361,7 +361,7 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "1025"))
 SMTP_USER = os.environ.get("SMTP_USER", "dan@diginoz.com.au")
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "ada@diginoz.com.au")
-APP_URL = os.environ.get("APP_URL", "https://adado.diginoz.com.au")
+APP_URL = os.environ.get("APP_URL", "https://adadoai.com")
 
 def send_email(to: str, subject: str, html_body: str) -> bool:
     try:
@@ -699,7 +699,7 @@ async def cli_login(req: LoginRequest):
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid credentials")
     if user["tier"] not in CLI_TIERS:
-        raise HTTPException(403, "CLI access requires a CLI, VPS, or Enterprise plan. Upgrade at adado.diginoz.com.au")
+        raise HTTPException(403, "CLI access requires a CLI, VPS, or Enterprise plan. Upgrade at adadoai.com")
     token = make_token(user["id"], req.email)
     return {
         "token": token,
