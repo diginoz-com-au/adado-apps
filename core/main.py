@@ -2845,6 +2845,86 @@ async def email_status(request: Request):
     }
 
 
+# ─── Support chat (pre-auth, public) ─────────────────────────────────────────
+
+# In-memory rate limiter: {ip: [timestamp, ...]}
+_support_rate: dict[str, list] = {}
+_SUPPORT_LIMIT = 10       # requests
+_SUPPORT_WINDOW = 3600    # 1 hour in seconds
+
+_SUPPORT_SYSTEM = (
+    "You are Ada, AdaDo's friendly AI assistant. "
+    "Help visitors with signup questions, explain what AdaDo does, "
+    "and troubleshoot onboarding issues. Be warm, direct, and concise. "
+    "AdaDo is a $29/mo all-in-one AI assistant — one login, one subscription, "
+    "every app included (email, tasks, calendar, files, and more). "
+    "If someone is having trouble signing up, walk them through it step by step. "
+    "Never pretend to have information you don't have. Keep replies under 120 words."
+)
+
+class SupportChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
+
+@app.post("/api/support/chat")
+async def support_chat(req: SupportChatRequest, request: Request):
+    # Rate limit by IP
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    hits = _support_rate.get(ip, [])
+    hits = [t for t in hits if now - t < _SUPPORT_WINDOW]
+    if len(hits) >= _SUPPORT_LIMIT:
+        raise HTTPException(429, "Too many requests — please try again later.")
+    hits.append(now)
+    _support_rate[ip] = hits
+
+    msg = req.message.strip()[:1000]
+    if not msg:
+        raise HTTPException(400, "Empty message")
+
+    reply = ""
+    if USE_ANTHROPIC:
+        try:
+            import anthropic
+            proxy = CLAUDE_PROXY_URL or (
+                "http://192.168.80.1:8211/" if ANTHROPIC_API_KEY.startswith("sk-ant-oat") else ""
+            )
+            if proxy:
+                client = anthropic.AsyncAnthropic(api_key="proxy", base_url=proxy)
+            elif ANTHROPIC_API_KEY.startswith("sk-ant-oat"):
+                client = anthropic.AsyncAnthropic(auth_token=ANTHROPIC_API_KEY)
+            else:
+                client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            resp = await client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=_SUPPORT_SYSTEM,
+                messages=[{"role": "user", "content": msg}],
+            )
+            reply = resp.content[0].text if resp.content else "Sorry, I couldn't respond right now."
+        except Exception as e:
+            reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
+    else:
+        try:
+            import httpx
+            payload = {
+                "model": CLAUDE_MODEL,
+                "messages": [
+                    {"role": "system", "content": _SUPPORT_SYSTEM},
+                    {"role": "user", "content": msg},
+                ],
+                "stream": False,
+            }
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.post(f"{OLLAMA_URL}/v1/chat/completions", json=payload)
+                data = r.json()
+                reply = data["choices"][0]["message"]["content"]
+        except Exception as e:
+            reply = f"Sorry, I'm having a technical issue: {str(e)[:60]}"
+
+    return {"reply": reply}
+
+
 # ─── Static / UI ──────────────────────────────────────────────────────────────
 
 static_dir = Path(__file__).parent / "static"

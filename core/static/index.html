@@ -934,7 +934,7 @@
     <!-- Step 1: Payment -->
     <div id="pay-step-payment">
       <h2>Start your AdaDo subscription</h2>
-      <p class="sub">$29/mo — cancel anytime. Your card is never stored on our servers.</p>
+      <p class="sub" id="pay-sub">$29/mo — cancel anytime. Your card is never stored on our servers.</p>
       <div id="stripe-card-el"></div>
       <div class="pay-err" id="pay-err"></div>
       <button class="pay-btn" id="pay-btn" onclick="doPayment()">Add card &amp; start →</button>
@@ -1718,8 +1718,13 @@ async function initStripeElement() {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) {
-      const d = await res.json();
-      document.getElementById('pay-err').textContent = d.detail || 'Could not initialise payment.';
+      const d = await res.json().catch(() => ({}));
+      const isNotConfigured = res.status === 503 || (d.detail || '').toLowerCase().includes('not configured');
+      if (isNotConfigured) {
+        document.getElementById('pay-err').textContent = 'Payment is not available right now. Please try again later.';
+      } else {
+        document.getElementById('pay-err').textContent = d.detail || 'Could not initialise payment.';
+      }
       return;
     }
     const { client_secret, publishable_key } = await res.json();
@@ -1820,6 +1825,258 @@ function dismissProtonBanner() {
   localStorage.setItem('proton_banner_dismissed', '1');
   document.getElementById('proton-banner').classList.remove('open');
 }
+</script>
+
+<!-- ── Ada support chat widget (pre-auth only) ── -->
+<style>
+  #ada-chat-bubble {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9000;
+    display: none;
+  }
+  #ada-chat-bubble.visible { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+
+  #ada-chat-toggle {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a78bfa, #6e5bf0);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 20px rgba(110,91,240,0.5);
+    transition: transform 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+  }
+  #ada-chat-toggle:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(110,91,240,0.65); }
+
+  #ada-chat-panel {
+    display: none;
+    flex-direction: column;
+    width: 320px;
+    max-height: 420px;
+    background: #16141f;
+    border: 1px solid #2a2540;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+  #ada-chat-panel.open { display: flex; }
+
+  .ada-chat-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    background: #1e1b2e;
+    border-bottom: 1px solid #2a2540;
+    flex-shrink: 0;
+  }
+  .ada-chat-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a78bfa, #6e5bf0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .ada-chat-title { font-size: 0.85rem; font-weight: 700; color: #f0eeff; }
+  .ada-chat-subtitle { font-size: 0.72rem; color: #8b80c0; margin-top: 1px; }
+  .ada-chat-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #8b80c0;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 2px;
+    transition: color 0.15s;
+  }
+  .ada-chat-close:hover { color: #f0eeff; }
+
+  #ada-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    scroll-behavior: smooth;
+  }
+  .ada-msg {
+    max-width: 88%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    word-wrap: break-word;
+  }
+  .ada-msg.ada { background: #1e1b2e; color: #f0eeff; align-self: flex-start; border-bottom-left-radius: 3px; }
+  .ada-msg.user { background: #2a2256; color: #f0eeff; align-self: flex-end; border-bottom-right-radius: 3px; }
+  .ada-msg.thinking { color: #8b80c0; font-style: italic; }
+
+  .ada-chat-footer {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0.6rem;
+    border-top: 1px solid #2a2540;
+    flex-shrink: 0;
+  }
+  #ada-chat-input {
+    flex: 1;
+    background: #0d0c14;
+    border: 1px solid #2a2540;
+    border-radius: 8px;
+    color: #f0eeff;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.65rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #ada-chat-input::placeholder { color: #8b80c0; }
+  #ada-chat-input:focus { border-color: #6e5bf0; }
+  #ada-chat-send {
+    background: #6e5bf0;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 0.7rem;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  #ada-chat-send:hover { background: #5a49d6; }
+  #ada-chat-send:disabled { background: #3d3260; cursor: default; }
+</style>
+
+<div id="ada-chat-bubble">
+  <div id="ada-chat-panel">
+    <div class="ada-chat-header">
+      <div class="ada-chat-avatar">💬</div>
+      <div>
+        <div class="ada-chat-title">Ada — AdaDo Support</div>
+        <div class="ada-chat-subtitle">Ask anything about signing up</div>
+      </div>
+      <button class="ada-chat-close" onclick="adaChatToggle()" title="Close">✕</button>
+    </div>
+    <div id="ada-chat-messages"></div>
+    <div class="ada-chat-footer">
+      <textarea id="ada-chat-input" rows="1" placeholder="Ask Ada anything…" onkeydown="adaChatKey(event)"></textarea>
+      <button id="ada-chat-send" onclick="adaChatSend()">↑</button>
+    </div>
+  </div>
+  <button id="ada-chat-toggle" onclick="adaChatToggle()" title="Chat with Ada">💬</button>
+</div>
+
+<script>
+(function() {
+  var _chatOpen = false;
+  var _chatSending = false;
+  var _chatSessionId = 'sc-' + Math.random().toString(36).slice(2, 10);
+
+  function _isLoggedIn() {
+    return !!localStorage.getItem('token');
+  }
+
+  function _showBubble() {
+    var el = document.getElementById('ada-chat-bubble');
+    if (el && !_isLoggedIn()) el.classList.add('visible');
+  }
+
+  // Show immediately; re-evaluate whenever auth state might change
+  _showBubble();
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'token') {
+      var el = document.getElementById('ada-chat-bubble');
+      if (!el) return;
+      if (_isLoggedIn()) {
+        el.classList.remove('visible');
+        document.getElementById('ada-chat-panel').classList.remove('open');
+        _chatOpen = false;
+      } else {
+        el.classList.add('visible');
+      }
+    }
+  });
+
+  window.adaChatToggle = function() {
+    var panel = document.getElementById('ada-chat-panel');
+    _chatOpen = !_chatOpen;
+    if (_chatOpen) {
+      panel.classList.add('open');
+      // Add welcome if first open
+      var msgs = document.getElementById('ada-chat-messages');
+      if (!msgs.hasChildNodes()) {
+        _addMsg('ada', "Hi! I'm Ada 👋 I can help you understand AdaDo, answer signup questions, or troubleshoot anything. What's on your mind?");
+      }
+      document.getElementById('ada-chat-input').focus();
+    } else {
+      panel.classList.remove('open');
+    }
+  };
+
+  function _addMsg(role, text) {
+    var msgs = document.getElementById('ada-chat-messages');
+    var el = document.createElement('div');
+    el.className = 'ada-msg ' + role;
+    el.textContent = text;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  window.adaChatKey = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      adaChatSend();
+    }
+  };
+
+  window.adaChatSend = async function() {
+    if (_chatSending) return;
+    var input = document.getElementById('ada-chat-input');
+    var msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    _addMsg('user', msg);
+    _chatSending = true;
+    document.getElementById('ada-chat-send').disabled = true;
+    var thinking = _addMsg('ada thinking', '…');
+    try {
+      var res = await fetch('/api/support/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, session_id: _chatSessionId }),
+      });
+      var data = await res.json();
+      thinking.remove();
+      if (res.ok) {
+        _addMsg('ada', data.reply || 'Sorry, no reply.');
+      } else if (res.status === 429) {
+        _addMsg('ada', 'You\'ve sent a lot of messages — please wait a minute and try again.');
+      } else {
+        _addMsg('ada', 'Sorry, something went wrong. Try again in a moment.');
+      }
+    } catch(e) {
+      thinking.remove();
+      _addMsg('ada', 'Connection error — please check your internet and try again.');
+    }
+    _chatSending = false;
+    document.getElementById('ada-chat-send').disabled = false;
+    document.getElementById('ada-chat-input').focus();
+  };
+})();
 </script>
 </body>
 </html>
