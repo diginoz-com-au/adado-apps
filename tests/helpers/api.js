@@ -3,11 +3,11 @@
  * Creates a unique test user per run and cleans up afterward.
  */
 
-const BASE_URL = process.env.BASE_URL || 'https://adado.diginoz.com.au';
+const BASE_URL = process.env.BASE_URL || 'https://adadoai.com';
 
 function testEmail() {
   const ts = Date.now();
-  return `test-playwright-${ts}@adado.test`;
+  return `test-playwright-${ts}@example.com`;
 }
 
 async function apiPost(request, path, body, token) {
@@ -35,13 +35,13 @@ async function createTestUser(request) {
   const name = 'Playwright Bot';
   const r = await apiPost(request, '/api/auth/signup', { email, password, name });
   const body = await r.json();
-  return { email, password, name, token: body.token, status: r.status() };
+  return { email, password, name, token: body.access_token, status: r.status() };
 }
 
 async function loginTestUser(request, email, password) {
   const r = await apiPost(request, '/api/auth/login', { email, password });
   const body = await r.json();
-  return { token: body.token, status: r.status() };
+  return { token: body.access_token, status: r.status() };
 }
 
 async function deleteTestUser(request, token) {

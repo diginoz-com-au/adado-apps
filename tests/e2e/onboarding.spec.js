@@ -7,13 +7,13 @@ const { BASE_URL, apiPost } = require('../helpers/api');
 
 test.describe('Onboarding overlay', () => {
   test('new user sees interests overlay after signup', async ({ page, request }) => {
-    const email = `pw-onboard-${Date.now()}@adado.test`;
+    const email = `pw-onboard-${Date.now()}@example.com`;
     const password = 'TestPW1234!';
 
     // Sign up via API, grab token
     const r = await apiPost(request, '/api/auth/signup', { email, password, name: 'Onboard Test' });
     expect(r.status()).toBe(200);
-    const { token } = await r.json();
+    const { access_token: token } = await r.json();
     expect(token).toBeTruthy();
 
     // Load app with fresh token (onboarding_complete=false)
@@ -44,11 +44,11 @@ test.describe('Onboarding overlay', () => {
   });
 
   test('interests API endpoint accepts selections', async ({ request }) => {
-    const email = `pw-interests-${Date.now()}@adado.test`;
+    const email = `pw-interests-${Date.now()}@example.com`;
     const password = 'TestPW1234!';
 
     const signupR = await apiPost(request, '/api/auth/signup', { email, password, name: 'Interest Test' });
-    const { token } = await signupR.json();
+    const { access_token: token } = await signupR.json();
 
     const r = await request.post(`${BASE_URL}/api/apps/install-interests`, {
       data: { interests: ['email', 'calendar', 'tasks'] },

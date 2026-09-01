@@ -1,7 +1,7 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
-const BASE_URL = process.env.BASE_URL || 'https://adado.diginoz.com.au';
+const BASE_URL = process.env.BASE_URL || 'https://adadoai.com';
 
 module.exports = defineConfig({
   testDir: '.',

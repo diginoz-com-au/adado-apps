@@ -36,7 +36,7 @@ test.describe('Signup flow', () => {
   const testPassword = 'TestPW1234!';
 
   test.beforeEach(() => {
-    testEmail = `pw-e2e-${Date.now()}@adado.test`;
+    testEmail = `pw-e2e-${Date.now()}@example.com`;
   });
 
   test('can toggle from sign-in to sign-up mode', async ({ page }) => {
@@ -103,7 +103,7 @@ test.describe('Login flow', () => {
     await page.locator('#auth-btn').click();
     await expect(page.locator('#auth-modal')).toBeVisible({ timeout: 5000 });
 
-    await page.locator('#email-input').fill('doesnotexist@adado.test');
+    await page.locator('#email-input').fill('doesnotexist@example.com');
     await page.locator('#pw-input').fill('WrongPassword!');
     await page.locator('#auth-submit').click();
 
