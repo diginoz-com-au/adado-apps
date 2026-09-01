@@ -15,6 +15,7 @@ port: 8200
 tier_required: cloud
 agent:
   id: backup-agent
+  display_name: "Backup"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Monitors backup health, triggers manual runs, and verifies restore points
   capabilities:

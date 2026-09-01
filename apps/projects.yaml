@@ -13,8 +13,11 @@ upstream: https://github.com/makeplane/plane
 docker_profile: projects
 port: 3000
 tier_required: cloud
+# Reference implementation of the AdaDo Agent Definition Spec (docs/AGENT-SPEC.md).
+# Every field of schema/agent.schema.json is exercised here — copy this as the template.
 agent:
   id: projects-agent
+  display_name: AdaDo Projects
   model: claude-cli/claude-haiku-4-5-20251001
   description: Manages your projects, tasks, and priorities — creates, updates, and tracks for you
   capabilities:
@@ -25,6 +28,23 @@ agent:
     - Assign tasks to team members
     - Report on project health and velocity
     - Turn a list of ideas into an organised project plan
+  required_apps:
+    - adado-projects
+  mcp_tools:
+    - mcp__plane__*
+  trigger_hooks:
+    - type: message
+      description: User asks Ada to create, update, or report on tasks in natural language.
+    - type: cron
+      config: "0 9 * * 1-5"
+      description: Weekday 09:00 standup — summarise in-progress and overdue issues.
+  auth:
+    required: true
+    credentials:
+      - name: PLANE_API_TOKEN
+        type: api_key
+        location: header:X-API-Key
+        description: Plane workspace API token, scoped to the user's projects.
   api_base: http://localhost:3000/api
 install_cmd: docker compose --profile projects up -d
 uninstall_cmd: docker compose --profile projects down

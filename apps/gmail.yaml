@@ -11,6 +11,7 @@ coming_soon: true
 market_leader: "Gmail"
 agent:
   id: gmail-agent
+  display_name: "Gmail"
   description: Triages Gmail, drafts replies, flags urgent emails, and sends on your behalf
   capabilities:
     - Summarise unread emails and flag urgent ones

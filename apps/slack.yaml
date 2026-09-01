@@ -11,6 +11,7 @@ coming_soon: true
 market_leader: "Slack"
 agent:
   id: slack-agent
+  display_name: "Slack"
   description: Monitors channels, summarises threads, flags mentions, and drafts replies
   capabilities:
     - Summarise what you missed in a channel

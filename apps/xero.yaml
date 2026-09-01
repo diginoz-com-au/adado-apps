@@ -11,6 +11,7 @@ coming_soon: true
 market_leader: "Xero"
 agent:
   id: xero-agent
+  display_name: "Xero"
   description: Tracks invoices, expenses, and cash flow — alerts you to what needs attention
   capabilities:
     - Show outstanding invoices and who owes you

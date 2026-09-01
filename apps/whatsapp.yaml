@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: whatsapp-agent
+  display_name: "WhatsApp"
   description: Drafts messages, summarises group chats, and sends WhatsApp messages on your behalf
   capabilities:
     - Draft and send messages in your voice

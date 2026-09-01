@@ -15,6 +15,7 @@ port: 3000
 tier_required: cli
 agent:
   id: metrics-agent
+  display_name: "AdaDo Metrics"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Queries dashboards, reports on system performance, and surfaces active alerts
   capabilities:

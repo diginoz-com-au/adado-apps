@@ -16,6 +16,7 @@ port: 8000
 tier_required: cloud
 agent:
   id: health-agent
+  display_name: "Health"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Logs health data, surfaces patterns, and keeps you on top of medications and routines
   capabilities:

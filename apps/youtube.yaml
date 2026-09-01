@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: youtube-agent
+  display_name: "YouTube"
   description: Monitors channel stats, summarises comments, and helps with titles, descriptions, and community posts
   capabilities:
     - Summarise comments and surface common questions

@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: google-drive-agent
+  display_name: "Google Drive"
   description: Searches, reads, and creates files in Google Drive on your behalf
   capabilities:
     - Find documents by topic or keyword

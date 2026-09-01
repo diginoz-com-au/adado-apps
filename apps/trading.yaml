@@ -15,6 +15,7 @@ port: 8080
 tier_required: cli
 agent:
   id: trading-agent
+  display_name: "AdaDo Trading"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Monitors bot performance, summarises trades, and alerts on key events
   capabilities:

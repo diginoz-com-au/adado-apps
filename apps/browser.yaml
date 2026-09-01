@@ -14,6 +14,7 @@ docker_profile: browser
 port: 8765
 agent:
   id: browser-agent
+  display_name: "AdaDo Browser"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Provides web automation to other Ada agents — handles browser tasks in the background
   capabilities:

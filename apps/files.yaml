@@ -15,6 +15,7 @@ port: 80
 tier_required: cloud
 agent:
   id: files-agent
+  display_name: "AdaDo Files"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Manages your file cloud — finds files, manages shares, and monitors storage
   capabilities:

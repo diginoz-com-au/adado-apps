@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: microsoft-365-agent
+  display_name: "Microsoft 365"
   description: Manages Outlook email, Teams messages, and OneDrive documents on your behalf
   capabilities:
     - Triage Outlook inbox and draft replies

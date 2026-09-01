@@ -15,6 +15,7 @@ port: 3000
 tier_required: cloud
 agent:
   id: social-agent
+  display_name: "Social Media"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Drafts, schedules, and publishes social media content across all platforms
   capabilities:

@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: github-agent
+  display_name: "GitHub"
   description: Monitors repos, summarises PRs, triages issues, and notifies you of what needs attention
   capabilities:
     - Summarise open pull requests waiting for your review

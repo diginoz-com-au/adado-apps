@@ -13,6 +13,7 @@ icon: 💭
 tier_required: cloud
 agent:
   id: dream-catcher-agent
+  display_name: "Dream Catcher"
   model: claude-cli/claude-sonnet-4-6
   description: Captures, organises, and develops ideas from any source into actionable tasks and projects
   capabilities:
@@ -23,7 +24,7 @@ agent:
     - Connect an idea to related notes, tasks, or goals
     - Surface ideas that have gone stale and ask whether to develop or drop them
     - Set a daily morning prompt to capture overnight thoughts
-  integrations:
+  required_apps:
     - adado-projects
     - adado-notes
 install_cmd: docker compose --profile dream-catcher up -d

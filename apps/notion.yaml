@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: notion-agent
+  display_name: "Notion"
   description: Creates notes, updates databases, and retrieves information from your Notion workspace
   capabilities:
     - Capture ideas and create pages by voice or chat

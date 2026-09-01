@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: shopify-agent
+  display_name: "Shopify"
   description: Monitors orders, inventory, and sales — flags what needs action and handles routine store tasks
   capabilities:
     - Daily sales and revenue summary

@@ -15,6 +15,7 @@ port: 8080
 tier_required: cloud
 agent:
   id: finance-agent
+  display_name: "AdaDo Finance"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Tracks spending, manages budgets, and gives you a clear picture of your finances
   capabilities:

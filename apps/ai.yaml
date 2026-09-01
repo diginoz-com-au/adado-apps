@@ -15,6 +15,7 @@ port: 80
 tier_required: cli
 agent:
   id: ai-agent
+  display_name: "AdaDo AI Studio"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Builds and runs AI workflows, chatbots, and knowledge-base applications
   capabilities:

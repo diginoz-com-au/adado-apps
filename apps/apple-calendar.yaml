@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: apple-calendar-agent
+  display_name: "Apple Calendar"
   description: Creates, moves, and reads events in your Apple Calendar via iCloud integration
   capabilities:
     - Book and reschedule events by voice or chat

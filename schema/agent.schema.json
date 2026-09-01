@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://adado.ai/schema/agent.schema.json",
+  "title": "AdaDo Agent Definition",
+  "description": "Canonical schema for an AdaDo agent definition. Lives as the `agent:` block inside an app manifest (apps/<slug>.yaml). See docs/AGENT-SPEC.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "display_name", "description", "capabilities"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique, stable agent identifier. Must match the app's chat_endpoint agent= param.",
+      "pattern": "^[a-z][a-z0-9-]*-agent$"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-facing name shown in the AdaDo UI.",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary of what the agent does, in plain user language.",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "model": {
+      "type": "string",
+      "description": "Model id the agent runs on (e.g. claude-cli/claude-haiku-4-5-20251001). Cheapest tier that does the job.",
+      "default": "claude-cli/claude-haiku-4-5-20251001"
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "User-facing list of concrete things the agent can do. Each item is a short imperative or example phrase.",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "required_apps": {
+      "type": "array",
+      "description": "App ids this agent depends on being installed/running (usually its own app plus any it integrates with).",
+      "items": { "type": "string", "pattern": "^adado-[a-z0-9-]+$" },
+      "default": []
+    },
+    "mcp_tools": {
+      "type": "array",
+      "description": "MCP tool name patterns the agent is allowed to call. Globs permitted (e.g. mcp__plane__*).",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "trigger_hooks": {
+      "type": "array",
+      "description": "Events that activate the agent. `message` = user chat; `cron` = scheduled; `webhook` = inbound HTTP; `event` = internal bus; `manual` = user-invoked only.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "enum": ["message", "cron", "webhook", "event", "manual"] },
+          "config": {
+            "type": "string",
+            "description": "Trigger-specific config: cron expression, webhook path, event name, or message pattern."
+          },
+          "description": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "auth": {
+      "type": "object",
+      "description": "What credentials the agent needs to reach its app/API.",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "credentials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+              "name": { "type": "string", "description": "Logical credential name, e.g. PLANE_API_TOKEN." },
+              "type": {
+                "type": "string",
+                "enum": ["api_key", "bearer_token", "oauth", "basic", "session_cookie", "none"]
+              },
+              "location": {
+                "type": "string",
+                "description": "Where the credential is presented, e.g. 'header:X-API-Key', 'env:PLANE_API_TOKEN'."
+              },
+              "description": { "type": "string" }
+            }
+          },
+          "default": []
+        }
+      }
+    },
+    "api_base": {
+      "type": "string",
+      "description": "Base URL of the app API the agent talks to."
+    }
+  }
+}

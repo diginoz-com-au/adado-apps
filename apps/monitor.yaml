@@ -14,6 +14,7 @@ docker_profile: monitor
 port: 3001
 agent:
   id: monitor-agent
+  display_name: "AdaDo Monitor"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Monitors your services, alerts on downtime, and tracks reliability over time
   capabilities:

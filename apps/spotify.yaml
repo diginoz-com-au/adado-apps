@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: spotify-agent
+  display_name: "Spotify"
   description: Controls playback, creates playlists, and searches your library on command
   capabilities:
     - Play, pause, skip, and control volume by voice or chat

@@ -15,6 +15,7 @@ port: 51821
 tier_required: cli
 agent:
   id: vpn-agent
+  display_name: "VPN"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Manages VPN clients, monitors connections, and configures access
   capabilities:

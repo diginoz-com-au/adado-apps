@@ -10,6 +10,7 @@ tier: 2
 coming_soon: true
 agent:
   id: instagram-agent
+  display_name: "Instagram"
   description: Schedules posts, drafts captions, replies to comments, and tracks engagement on Instagram
   capabilities:
     - Draft captions and hashtags from a brief description

@@ -15,6 +15,7 @@ port: 3000
 tier_required: cli
 agent:
   id: git-agent
+  display_name: "AdaDo Git"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Manages your code repositories, issues, and development workflow
   capabilities:

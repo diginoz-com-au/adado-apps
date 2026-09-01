@@ -15,6 +15,7 @@ port: 8080
 tier_required: cloud
 agent:
   id: links-agent
+  display_name: "Link Manager"
   model: claude-cli/claude-haiku-4-5-20251001
   description: Creates short links, tracks performance, and manages your link library
   capabilities:
