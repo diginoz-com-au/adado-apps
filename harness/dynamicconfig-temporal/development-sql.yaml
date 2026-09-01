@@ -1,0 +1,11 @@
+# Temporal dynamic config for SQL visibility (no Elasticsearch)
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+# Allow more custom Text search attributes (default limit is 3; Postiz needs 4)
+limit.maxCustomSearchAttributePerNamespaceCount:
+  - value: 10
+    constraints: {}
+system.searchAttributesSizeOfValueLimit:
+  - value: 2048
+    constraints: {}
