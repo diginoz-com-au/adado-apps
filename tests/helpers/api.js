@@ -35,13 +35,13 @@ async function createTestUser(request) {
   const name = 'Playwright Bot';
   const r = await apiPost(request, '/api/auth/signup', { email, password, name });
   const body = await r.json();
-  return { email, password, name, token: body.access_token, status: r.status() };
+  return { email, password, name, token: body.token, status: r.status() };
 }
 
 async function loginTestUser(request, email, password) {
   const r = await apiPost(request, '/api/auth/login', { email, password });
   const body = await r.json();
-  return { token: body.access_token, status: r.status() };
+  return { token: body.token, status: r.status() };
 }
 
 async function deleteTestUser(request, token) {
