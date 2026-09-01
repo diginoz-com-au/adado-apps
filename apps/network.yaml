@@ -1,4 +1,6 @@
 id: adado-network
+slug: network
+tagline: "Block ads & trackers network-wide"
 chat_endpoint: /ws/chat?agent=network-agent
 name: Network Shield
 description: Let Ada query DNS block stats and manage Pi-hole — network-wide ad and tracker blocking, no client install needed.

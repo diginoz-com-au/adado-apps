@@ -1,4 +1,6 @@
 id: adado-photos
+slug: photos
+tagline: "Self-hosted Google Photos with AI"
 chat_endpoint: /ws/chat?agent=photos-agent
 name: AdaDo Photos
 description: Let Ada search, organise, and share your photo library in Immich — self-hosted Google Photos with AI face recognition.

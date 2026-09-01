@@ -1,4 +1,6 @@
 id: adado-calendar
+slug: calendar
+tagline: "Let Ada book, reschedule, and query your Proton Calendar — your private, end-..."
 name: Calendar
 description: Let Ada book, reschedule, and query your Proton Calendar — your private, end-to-end encrypted calendar.
 category: productivity

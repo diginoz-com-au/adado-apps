@@ -1,4 +1,6 @@
 id: youtube
+slug: youtube
+tagline: "Your channel, growing without the grind"
 name: YouTube
 description: Let Ada monitor your channel, summarise comments, draft video descriptions, and help you grow without the manual grind.
 short_description: Your channel, growing without the grind

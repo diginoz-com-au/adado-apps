@@ -1,4 +1,6 @@
 id: github
+slug: github
+tagline: "Code reviews and issues, summarised for you"
 name: GitHub
 description: Let Ada monitor your repos, summarise pull requests, triage issues, and keep your team moving without you living in GitHub.
 short_description: Code reviews and issues, summarised for you

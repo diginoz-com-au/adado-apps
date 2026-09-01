@@ -1,4 +1,6 @@
 id: whatsapp
+slug: whatsapp
+tagline: "Messages sent, not delayed"
 name: WhatsApp
 description: Let Ada draft and send WhatsApp messages, summarise group chats, and make sure you never leave someone hanging.
 short_description: Messages sent, not delayed

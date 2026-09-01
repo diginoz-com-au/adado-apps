@@ -1,4 +1,6 @@
 id: adado-social
+slug: social
+tagline: "Schedule & publish to any platform"
 chat_endpoint: /ws/chat?agent=social-agent
 name: Social Media
 description: Let Ada schedule and publish social posts via Postiz — the open-source Buffer alternative, no subscription needed.

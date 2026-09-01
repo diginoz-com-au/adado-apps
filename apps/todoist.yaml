@@ -1,4 +1,6 @@
 id: todoist
+slug: todoist
+tagline: "Tasks handled, not forgotten"
 name: Todoist
 description: Let Ada manage your task list in Todoist — capture tasks from conversation, reschedule overdue items, and keep your priorities straight.
 short_description: Tasks handled, not forgotten

@@ -1,4 +1,6 @@
 id: slack
+slug: slack
+tagline: "Stay on top of Slack without living in it"
 name: Slack
 description: Let Ada monitor your Slack channels, surface what matters, and draft responses without you context-switching all day.
 short_description: Stay on top of Slack without living in it

@@ -1,4 +1,6 @@
 id: xero
+slug: xero
+tagline: "Business finances without the spreadsheets"
 name: Xero
 description: Let Ada track invoices, flag overdue payments, and give you a real-time picture of your business cash flow in Xero.
 short_description: Business finances without the spreadsheets

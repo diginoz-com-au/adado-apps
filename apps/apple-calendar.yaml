@@ -1,4 +1,6 @@
 id: apple-calendar
+slug: apple-calendar
+tagline: "iCloud Calendar, managed by Ada"
 name: Apple Calendar
 description: Let Ada manage your Apple Calendar — schedule, reschedule, and brief you on what's coming up, right from Ada chat.
 short_description: iCloud Calendar, managed by Ada

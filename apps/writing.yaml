@@ -1,4 +1,6 @@
 id: adado-writing
+slug: writing
+tagline: "Draft, edit & collaborate on docs"
 chat_endpoint: /ws/chat?agent=writing-agent
 name: Writing Studio
 description: Let Ada draft, edit, and collaborate on documents in OnlyOffice — the open-source Office 365 that lives on your server.

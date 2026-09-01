@@ -1,4 +1,6 @@
 id: adado-projects
+slug: projects
+tagline: "Tasks, boards & project tracking"
 chat_endpoint: /ws/chat?agent=projects-agent
 name: AdaDo Projects
 description: Let Ada create tasks, update statuses, and report on velocity in Plane — the open-source project management platform.

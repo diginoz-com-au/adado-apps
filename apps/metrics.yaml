@@ -1,4 +1,6 @@
 id: adado-metrics
+slug: metrics
+tagline: "Dashboards & alerts for everything"
 chat_endpoint: /ws/chat?agent=metrics-agent
 name: AdaDo Metrics
 description: Let Ada query dashboards and alert on system health via Grafana — the open-source observability standard.

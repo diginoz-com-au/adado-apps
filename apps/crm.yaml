@@ -1,4 +1,6 @@
 id: adado-crm
+slug: crm
+tagline: "Track contacts & relationships"
 chat_endpoint: /ws/chat?agent=crm-agent
 name: AdaDo CRM
 description: Let Ada manage your contacts and relationships in Monica — the open-source personal CRM.

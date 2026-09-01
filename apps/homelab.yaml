@@ -1,4 +1,6 @@
 id: adado-homelab
+slug: homelab
+tagline: "Control all your Docker containers"
 chat_endpoint: /ws/chat?agent=homelab-agent
 name: Home Lab
 description: Let Ada start, stop, and inspect Docker containers via Portainer — your entire server stack in one visual panel.

@@ -1,4 +1,6 @@
 id: notion
+slug: notion
+tagline: "Your second brain, actually organised"
 name: Notion
 description: Let Ada keep your Notion workspace organised — capture notes, update databases, and surface what you need without digging through pages.
 short_description: Your second brain, actually organised

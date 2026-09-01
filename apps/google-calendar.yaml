@@ -1,4 +1,6 @@
 id: google-calendar
+slug: google-calendar
+tagline: "Your schedule, managed for you"
 name: Google Calendar
 description: Let Ada manage your Google Calendar — schedule, reschedule, and protect your time automatically.
 short_description: Your schedule, managed for you

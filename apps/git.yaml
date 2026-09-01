@@ -1,4 +1,6 @@
 id: adado-git
+slug: git
+tagline: "Self-hosted repos, PRs & code review"
 chat_endpoint: /ws/chat?agent=git-agent
 name: AdaDo Git
 description: Let Ada create repos, review pull requests, and manage issues in Gitea — self-hosted GitHub, on your terms.

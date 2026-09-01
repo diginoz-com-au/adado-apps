@@ -1,4 +1,6 @@
 id: instagram
+slug: instagram
+tagline: "Your Instagram, running on autopilot"
 name: Instagram
 description: Let Ada schedule posts, reply to comments, and keep your Instagram presence active without you opening the app every hour.
 short_description: Your Instagram, running on autopilot

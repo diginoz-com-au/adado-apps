@@ -1,4 +1,6 @@
 id: adado-email
+slug: email
+tagline: "Let Ada read, triage, draft, and send email via Proton Mail — zero surveillan..."
 name: Email
 description: Let Ada read, triage, draft, and send email via Proton Mail — zero surveillance, end-to-end encrypted.
 category: communication

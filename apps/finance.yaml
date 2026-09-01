@@ -1,4 +1,6 @@
 id: adado-finance
+slug: finance
+tagline: "Budget tracking, zero surprises"
 chat_endpoint: /ws/chat?agent=finance-agent
 name: AdaDo Finance
 description: Let Ada track budgets, log transactions, and surface spending trends in YNAB — the gold standard for personal finance.

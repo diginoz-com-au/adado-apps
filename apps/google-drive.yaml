@@ -1,4 +1,6 @@
 id: google-drive
+slug: google-drive
+tagline: "Files found, not searched for"
 name: Google Drive
 description: Let Ada find, summarise, and create documents in your Google Drive — stop hunting through folders.
 short_description: Files found, not searched for

@@ -1,4 +1,6 @@
 id: microsoft-365
+slug: microsoft-365
+tagline: "Outlook, Teams, OneDrive — handled"
 name: Microsoft 365
 description: Let Ada manage your Outlook inbox, Teams messages, and OneDrive files — one place, no switching apps.
 short_description: Outlook, Teams, OneDrive — handled

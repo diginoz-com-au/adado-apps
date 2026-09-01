@@ -1,4 +1,6 @@
 id: spotify
+slug: spotify
+tagline: "Music on demand, no fiddling"
 name: Spotify
 description: Let Ada control your music — create playlists by mood, skip to the right song, and manage Spotify by voice without touching the app.
 short_description: Music on demand, no fiddling

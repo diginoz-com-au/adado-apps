@@ -1,4 +1,6 @@
 id: adado-chat
+slug: chat
+tagline: "Multi-model AI chat — compare & save"
 chat_endpoint: /ws/chat?agent=chat-agent
 name: AdaDo Chat
 description: Let Ada orchestrate multi-model AI conversations in Open WebUI — switch models mid-chat, compare outputs, and save threads.

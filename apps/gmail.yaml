@@ -1,4 +1,6 @@
 id: gmail
+slug: gmail
+tagline: "Inbox zero, handled by Ada"
 name: Gmail
 description: Let Ada read, triage, and draft replies in your Gmail inbox — no more email overwhelm.
 short_description: Inbox zero, handled by Ada

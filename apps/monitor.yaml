@@ -1,4 +1,6 @@
 id: adado-monitor
+slug: monitor
+tagline: "Know when services go down, first"
 chat_endpoint: /ws/chat?agent=monitor-agent
 name: AdaDo Monitor
 description: Let Ada check service status and manage status pages in Uptime Kuma — know when something goes down before users do.

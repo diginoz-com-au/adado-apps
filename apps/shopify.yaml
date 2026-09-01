@@ -1,4 +1,6 @@
 id: shopify
+slug: shopify
+tagline: "Your store, managed for you"
 name: Shopify
 description: Let Ada monitor your store, flag low stock, draft product descriptions, and give you a daily sales summary without logging into Shopify.
 short_description: Your store, managed for you

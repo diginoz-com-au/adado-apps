@@ -1,4 +1,6 @@
 id: adado-shopping
+slug: shopping
+tagline: "Pantry, shopping lists & recipes"
 chat_endpoint: /ws/chat?agent=shopping-agent
 name: Shopping & Home
 description: Let Ada manage your pantry, shopping lists, and recipes in Grocy — home inventory done properly.
