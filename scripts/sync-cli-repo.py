@@ -7,6 +7,7 @@ TOKEN = os.environ.get("GITHUB_TOKEN") or open(os.path.expanduser("~/.adado-gith
 REPO  = "diginoz-com-au/adado-cli"
 BASE  = "/home/ada/adado"
 DIRS  = ["agents", "apps"]
+FILES = ["install.sh", "install.ps1"]
 
 HEADERS = {
     "Authorization": f"token {TOKEN}",
@@ -82,5 +83,33 @@ for d in DIRS:
             print(f"  FAIL  {fname}")
             failed += 1
         time.sleep(0.3)  # be kind to the API
+
+print(f"\n── root files ──")
+remote = list_remote("")
+for fname in FILES:
+    local_path = os.path.join(BASE, fname)
+    if not os.path.exists(local_path):
+        print(f"  skip {fname} (not found)")
+        continue
+
+    local_sha = git_sha(local_path)
+    remote_sha = remote.get(fname)
+
+    if remote_sha and remote_sha == local_sha:
+        print(f"  ok  {fname}")
+        continue
+
+    action = "update" if remote_sha else "create"
+    ok = push_file(fname, local_path, remote_sha)
+    if ok:
+        print(f"  {action}d  {fname}")
+        if remote_sha:
+            updated += 1
+        else:
+            created += 1
+    else:
+        print(f"  FAIL  {fname}")
+        failed += 1
+    time.sleep(0.3)  # be kind to the API
 
 print(f"\nDone: {created} created, {updated} updated, {failed} failed.")
