@@ -3,6 +3,7 @@ slug: browser
 tagline: "Gives Ada a real browser to navigate, extract data, and automate any website ..."
 name: AdaDo Browser
 description: Gives Ada a real browser to navigate, extract data, and automate any website on your behalf.
+short_description: "Headless browser for Ada's web automation"
 category: core infrastructure
 market_leader: "Playwright"
 homepage_tile: true

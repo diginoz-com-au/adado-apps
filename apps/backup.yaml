@@ -4,6 +4,7 @@ tagline: "Let Ada schedule and verify encrypted backups via Duplicati — set it
 is_core: true
 name: Backup
 description: Let Ada schedule and verify encrypted backups via Duplicati — set it once, never lose data.
+short_description: "Automated encrypted backups, verified by Ada"
 category: infrastructure
 market_leader: "Duplicati"
 homepage_tile: true
