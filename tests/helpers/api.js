@@ -4,6 +4,7 @@
  */
 
 const BASE_URL = process.env.BASE_URL || 'https://adadoai.com';
+const TEST_INVITE_CODE = process.env.TEST_INVITE_CODE || 'CI-TEST-AUTORUN';
 
 function testEmail() {
   const ts = Date.now();
@@ -33,7 +34,9 @@ async function createTestUser(request) {
   const email = testEmail();
   const password = 'PlaywrightTest1!';
   const name = 'Playwright Bot';
-  const r = await apiPost(request, '/api/auth/signup', { email, password, name });
+  const r = await apiPost(request, '/api/auth/signup', {
+    email, password, name, invite_code: TEST_INVITE_CODE,
+  });
   const body = await r.json();
   return { email, password, name, token: body.token, status: r.status() };
 }
