@@ -13,7 +13,7 @@ on:
       base_url:
         description: 'Target URL to test against'
         required: false
-        default: 'https://adado.diginoz.com.au'
+        default: 'https://adadoai.com'
 
 jobs:
   api-smoke:
@@ -40,7 +40,7 @@ jobs:
       - name: Run API smoke tests
         working-directory: tests
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://adado.diginoz.com.au' }}
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://adadoai.com' }}
         run: npx playwright test api/ --reporter=list,json
 
       - name: Upload test results
@@ -76,7 +76,7 @@ jobs:
       - name: Run E2E tests
         working-directory: tests
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://adado.diginoz.com.au' }}
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://adadoai.com' }}
           CI: true
         run: npx playwright test e2e/ --project=chromium
 
