@@ -1361,8 +1361,20 @@ function renderMarkdown(text) {
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Handle password reset link: /reset-password?token=...  OR  /?token=...
   const urlParams = new URLSearchParams(window.location.search);
+
+  // Pick up token passed from landing page after signup/login
+  const passedToken = urlParams.get('_t');
+  const passedName  = urlParams.get('_n');
+  if (passedToken) {
+    token = passedToken;
+    localStorage.setItem('adado_token', token);
+    if (passedName) { userName = decodeURIComponent(passedName); localStorage.setItem('adado_name', userName); }
+    // Clean URL without reloading
+    history.replaceState({}, '', '/');
+  }
+
+  // Handle password reset link: /reset-password?token=...  OR  /?token=...
   const resetToken = urlParams.get('token');
   if (resetToken && (window.location.pathname === '/reset-password' || window.location.pathname === '/')) {
     document.getElementById('reset-modal').style.display = 'flex';
