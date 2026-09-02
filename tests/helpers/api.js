@@ -38,13 +38,15 @@ async function createTestUser(request) {
     email, password, name, invite_code: TEST_INVITE_CODE,
   });
   const body = await r.json();
-  return { email, password, name, token: body.token, status: r.status() };
+  const token = body.token || body.access_token;
+  return { email, password, name, token, status: r.status() };
 }
 
 async function loginTestUser(request, email, password) {
   const r = await apiPost(request, '/api/auth/login', { email, password });
   const body = await r.json();
-  return { token: body.token, status: r.status() };
+  const token = body.token || body.access_token;
+  return { token, status: r.status() };
 }
 
 async function deleteTestUser(request, token) {
