@@ -3,7 +3,7 @@ AdaDo Core — The Ada runtime for customers.
 FastAPI server: auth, onboarding, WebSocket chat, app tiles.
 Supports Anthropic API (sk-ant-* key) or Ollama (local, free).
 """
-import os, json, sqlite3, hashlib, secrets, time, yaml, bcrypt
+import os, json, sqlite3, hashlib, secrets, time, uuid, yaml, bcrypt
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -338,6 +338,27 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now'))
         )
     """)
+    # Scheduler tasks — foundation for dreamcatcher / token management pipeline
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS scheduled_tasks (
+            id TEXT PRIMARY KEY,
+            source TEXT NOT NULL DEFAULT 'manual',
+            plane_issue_id TEXT,
+            title TEXT NOT NULL,
+            description TEXT,
+            priority TEXT DEFAULT 'medium',
+            token_estimate INTEGER,
+            material_cost_cents INTEGER,
+            pool TEXT,
+            scheduled_for TEXT,
+            status TEXT NOT NULL DEFAULT 'queued',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_st_status ON scheduled_tasks(status)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_st_pool ON scheduled_tasks(pool)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_st_scheduled_for ON scheduled_tasks(scheduled_for)")
     db.commit()
     db.close()
 
@@ -3442,6 +3463,125 @@ async def clear_maintenance(request: Request):
         raise HTTPException(401, "Unauthorized")
     _write_maintenance({"active": False, "message": "", "level": "info"})
     return {"active": False}
+
+
+# ─── Scheduler API ─────────────────────────────────────────────────────────────
+
+class ScheduledTaskCreate(BaseModel):
+    title: str
+    source: str = "manual"
+    plane_issue_id: Optional[str] = None
+    description: Optional[str] = None
+    priority: str = "medium"
+    token_estimate: Optional[int] = None
+    material_cost_cents: Optional[int] = None
+    pool: Optional[str] = None
+    scheduled_for: Optional[str] = None
+
+class ScheduledTaskUpdate(BaseModel):
+    status: Optional[str] = None
+    scheduled_for: Optional[str] = None
+    token_estimate: Optional[int] = None
+    material_cost_cents: Optional[int] = None
+
+@app.get("/api/scheduler/tasks")
+async def list_scheduled_tasks(request: Request, status: Optional[str] = None, pool: Optional[str] = None, limit: int = 50):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    try:
+        query = "SELECT * FROM scheduled_tasks WHERE 1=1"
+        params: list = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if pool:
+            query += " AND pool = ?"
+            params.append(pool)
+        query += " ORDER BY scheduled_for ASC NULLS LAST, created_at ASC LIMIT ?"
+        params.append(limit)
+        rows = db.execute(query, params).fetchall()
+        return {"tasks": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+@app.post("/api/scheduler/tasks")
+async def create_scheduled_task(request: Request, body: ScheduledTaskCreate):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    task_id = str(uuid.uuid4())
+    db = get_db()
+    try:
+        db.execute(
+            """INSERT INTO scheduled_tasks
+               (id, source, plane_issue_id, title, description, priority,
+                token_estimate, material_cost_cents, pool, scheduled_for, status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,'queued')""",
+            (task_id, body.source, body.plane_issue_id, body.title,
+             body.description, body.priority, body.token_estimate,
+             body.material_cost_cents, body.pool, body.scheduled_for)
+        )
+        db.commit()
+        row = db.execute("SELECT * FROM scheduled_tasks WHERE id=?", (task_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+@app.patch("/api/scheduler/tasks/{task_id}")
+async def update_scheduled_task(task_id: str, request: Request, body: ScheduledTaskUpdate):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    try:
+        row = db.execute("SELECT id FROM scheduled_tasks WHERE id=?", (task_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Task not found")
+        updates = []
+        params = []
+        if body.status is not None:
+            valid_statuses = {'queued', 'running', 'done', 'deferred'}
+            if body.status not in valid_statuses:
+                raise HTTPException(400, f"Invalid status. Must be one of: {valid_statuses}")
+            updates.append("status=?")
+            params.append(body.status)
+        if body.scheduled_for is not None:
+            updates.append("scheduled_for=?")
+            params.append(body.scheduled_for)
+        if body.token_estimate is not None:
+            updates.append("token_estimate=?")
+            params.append(body.token_estimate)
+        if body.material_cost_cents is not None:
+            updates.append("material_cost_cents=?")
+            params.append(body.material_cost_cents)
+        if not updates:
+            raise HTTPException(400, "No fields to update")
+        updates.append("updated_at=datetime('now')")
+        params.append(task_id)
+        db.execute(f"UPDATE scheduled_tasks SET {', '.join(updates)} WHERE id=?", params)
+        db.commit()
+        row = db.execute("SELECT * FROM scheduled_tasks WHERE id=?", (task_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+@app.delete("/api/scheduler/tasks/{task_id}")
+async def delete_scheduled_task(task_id: str, request: Request):
+    user = get_auth_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    db = get_db()
+    try:
+        row = db.execute("SELECT id FROM scheduled_tasks WHERE id=?", (task_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Task not found")
+        db.execute("DELETE FROM scheduled_tasks WHERE id=?", (task_id,))
+        db.commit()
+        return {"deleted": task_id}
+    finally:
+        db.close()
 
 # ─── robots / sitemap ─────────────────────────────────────────────────────────
 
