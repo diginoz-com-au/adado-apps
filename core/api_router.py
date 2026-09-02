@@ -16,12 +16,21 @@ from cryptography.fernet import Fernet
 
 # ─── Encryption ──────────────────────────────────────────────────────────────
 
-_KEY_PATH = os.path.expanduser("~/.adado-router.key")
+# Key is stored in the data volume (/data) so it survives container rebuilds.
+# Falls back to home dir for backwards compatibility.
+_KEY_PATH = "/data/.adado-router.key"
+_KEY_PATH_LEGACY = os.path.expanduser("~/.adado-router.key")
 
 
 def _fernet() -> Fernet:
+    # Migrate legacy key to volume path on first run
+    if not os.path.exists(_KEY_PATH) and os.path.exists(_KEY_PATH_LEGACY):
+        import shutil
+        shutil.copy2(_KEY_PATH_LEGACY, _KEY_PATH)
+        os.chmod(_KEY_PATH, 0o600)
     if not os.path.exists(_KEY_PATH):
         key = Fernet.generate_key()
+        os.makedirs(os.path.dirname(_KEY_PATH), exist_ok=True)
         with open(_KEY_PATH, "wb") as f:
             f.write(key)
         os.chmod(_KEY_PATH, 0o600)
@@ -447,6 +456,19 @@ class NoAccountAvailableError(Exception):
     pass
 
 
+_DEFAULT_PROXY = "http://192.168.80.1:8211/"
+
+
+def _make_client(api_key: str) -> anthropic.AsyncAnthropic:
+    """Create an AsyncAnthropic client, routing through proxy for oat tokens."""
+    proxy = os.getenv("CLAUDE_PROXY_URL", "")
+    if not proxy and api_key.startswith("sk-ant-oat"):
+        proxy = _DEFAULT_PROXY
+    if proxy:
+        return anthropic.AsyncAnthropic(api_key="proxy", base_url=proxy)
+    return anthropic.AsyncAnthropic(api_key=api_key)
+
+
 async def get_client(user_id: int, estimated_tokens: int = 1000) -> RouteResult:
     """
     Main entry point. Returns a configured AsyncAnthropic client + metadata.
@@ -457,7 +479,7 @@ async def get_client(user_id: int, estimated_tokens: int = 1000) -> RouteResult:
     byok_key = get_user_byok(user_id)
     if byok_key:
         return RouteResult(
-            client=anthropic.AsyncAnthropic(api_key=byok_key),
+            client=_make_client(byok_key),
             account_id=None,
             source="byok",
         )
@@ -481,7 +503,7 @@ async def get_client(user_id: int, estimated_tokens: int = 1000) -> RouteResult:
         for acc in pool:
             if acc.id == affinity_id and acc.has_headroom(estimated_tokens):
                 return RouteResult(
-                    client=anthropic.AsyncAnthropic(api_key=acc.api_key),
+                    client=_make_client(acc.api_key),
                     account_id=acc.id,
                     source="affinity",
                     quota_warn=quota["warn"],
@@ -497,7 +519,7 @@ async def get_client(user_id: int, estimated_tokens: int = 1000) -> RouteResult:
     _set_user_affinity(user_id, best.id)
 
     return RouteResult(
-        client=anthropic.AsyncAnthropic(api_key=best.api_key),
+        client=_make_client(best.api_key),
         account_id=best.id,
         source="pool",
         quota_warn=quota["warn"],
