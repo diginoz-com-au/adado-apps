@@ -1,0 +1,21 @@
+id: adado-legal
+slug: legal
+tagline: "Contract review & obligation tracking"
+name: Legal
+description: Let Ada review contracts in plain English, track renewal deadlines, and flag red flags — without replacing your solicitor.
+short_description: "Contract review & obligation tracking"
+category: productivity
+icon: ⚖️
+tier: 2
+coming_soon: false
+agent:
+  id: legal-agent
+  display_name: "Legal"
+  description: Reviews contracts, tracks obligations and deadlines, explains legal terms in plain English
+  capabilities:
+    - Review contracts and summarise key terms in plain English
+    - Flag unusual or risky clauses (penalties, auto-renewal, liability)
+    - Track renewal dates, notice periods, and compliance deadlines
+    - Explain legal concepts without giving legal advice
+    - Prepare questions to ask your solicitor
+    - Alert you before contract windows close
