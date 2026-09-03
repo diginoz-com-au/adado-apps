@@ -6,7 +6,7 @@ test('test apps endpoint', async ({ request }) => {
   const ts = Date.now();
   const email = `test-pw-${ts}@test.com`;
   const signup = await request.post(`${BASE_URL}/api/auth/signup`, {
-    data: { email, password: 'Test123!', name: 'T', invite_code: 'CI-TEST-AUTORUN' },
+    data: { email, password: 'Test123!', name: 'T', invite_code: 'CI-TEST-AUTORUN', terms_accepted: true },
     headers: { 'Content-Type': 'application/json' }
   });
   console.log('Signup status:', signup.status());

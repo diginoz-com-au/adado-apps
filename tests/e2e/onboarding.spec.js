@@ -11,7 +11,7 @@ test.describe('Onboarding overlay', () => {
     const password = 'TestPW1234!';
 
     // Sign up via API, grab token
-    const r = await apiPost(request, '/api/auth/signup', { email, password, name: 'Onboard Test' });
+    const r = await apiPost(request, '/api/auth/signup', { email, password, name: 'Onboard Test', terms_accepted: true });
     expect(r.status()).toBe(200);
     const { access_token: token } = await r.json();
     expect(token).toBeTruthy();
@@ -47,7 +47,7 @@ test.describe('Onboarding overlay', () => {
     const email = `pw-interests-${Date.now()}@example.com`;
     const password = 'TestPW1234!';
 
-    const signupR = await apiPost(request, '/api/auth/signup', { email, password, name: 'Interest Test' });
+    const signupR = await apiPost(request, '/api/auth/signup', { email, password, name: 'Interest Test', terms_accepted: true });
     const { access_token: token } = await signupR.json();
 
     const r = await request.post(`${BASE_URL}/api/apps/install-interests`, {

@@ -35,7 +35,7 @@ async function createTestUser(request) {
   const password = 'PlaywrightTest1!';
   const name = 'Playwright Bot';
   const r = await apiPost(request, '/api/auth/signup', {
-    email, password, name, invite_code: TEST_INVITE_CODE,
+    email, password, name, invite_code: TEST_INVITE_CODE, terms_accepted: true,
   });
   const body = await r.json();
   const token = body.token || body.access_token;
