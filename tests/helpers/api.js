@@ -11,6 +11,10 @@ function testEmail() {
   return `test-playwright-${ts}@example.com`;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function apiPost(request, path, body, token) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -30,23 +34,43 @@ async function apiDelete(request, path, token) {
   return request.delete(`${BASE_URL}${path}`, { headers });
 }
 
-async function createTestUser(request) {
+async function safeJson(r) {
+  const ct = r.headers()['content-type'] || '';
+  if (!ct.includes('application/json')) return {};
+  try { return await r.json(); } catch { return {}; }
+}
+
+async function createTestUser(request, retries = 3) {
   const email = testEmail();
   const password = 'PlaywrightTest1!';
   const name = 'Playwright Bot';
-  const r = await apiPost(request, '/api/auth/signup', {
-    email, password, name, invite_code: TEST_INVITE_CODE, terms_accepted: true,
-  });
-  const body = await r.json();
-  const token = body.token || body.access_token;
-  return { email, password, name, token, status: r.status() };
+  for (let i = 0; i < retries; i++) {
+    const r = await apiPost(request, '/api/auth/signup', {
+      email, password, name, invite_code: TEST_INVITE_CODE, terms_accepted: true,
+    });
+    if (r.status() === 429) {
+      await sleep(15000);
+      continue;
+    }
+    const body = await safeJson(r);
+    const token = body.token || body.access_token;
+    return { email, password, name, token, status: r.status() };
+  }
+  return { email, password, name, token: null, status: 429 };
 }
 
-async function loginTestUser(request, email, password) {
-  const r = await apiPost(request, '/api/auth/login', { email, password });
-  const body = await r.json();
-  const token = body.token || body.access_token;
-  return { token, status: r.status() };
+async function loginTestUser(request, email, password, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    const r = await apiPost(request, '/api/auth/login', { email, password });
+    if (r.status() === 429) {
+      await sleep(15000);
+      continue;
+    }
+    const body = await safeJson(r);
+    const token = body.token || body.access_token;
+    return { token, status: r.status() };
+  }
+  return { token: null, status: 429 };
 }
 
 async function deleteTestUser(request, token) {
