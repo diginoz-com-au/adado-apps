@@ -7,10 +7,12 @@ set -euo pipefail
 VPS_IP="${1:?VPS IP required}"
 DOMAIN="${2:-adadoai.com}"
 SSH_KEY="${SSH_KEY:-~/.ssh/id_ed25519_contabo}"
+SSH_USER="${SSH_USER:-ada}"
 ADADO_DIR="/home/ada/adado"
 
-SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no root@$VPS_IP"
+SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no ${SSH_USER}@$VPS_IP"
 SCP="scp -i $SSH_KEY"
+SUDO="sudo"
 
 echo "=== AdaDo Production Deploy ==="
 echo "VPS: $VPS_IP | Domain: $DOMAIN"
@@ -20,7 +22,7 @@ echo ""
 # 1. Install Docker + dependencies
 # ----------------------------------------------------------------
 echo "[1/6] Installing Docker and dependencies..."
-$SSH bash << 'REMOTE'
+$SSH sudo bash << 'REMOTE'
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
@@ -29,6 +31,7 @@ apt-get install -y -q \
     certbot python3-certbot-nginx \
     nginx git curl ufw fail2ban
 systemctl enable --now docker nginx
+usermod -aG docker ada
 ufw --force enable
 ufw allow ssh
 ufw allow http
@@ -42,19 +45,20 @@ echo "  done."
 # 2. Create directory structure on VPS
 # ----------------------------------------------------------------
 echo "[2/6] Creating /opt/adado structure..."
-$SSH mkdir -p /opt/adado/{harness,core,agents,apps,data}
+$SSH sudo mkdir -p /opt/adado/{harness,core,agents,apps,data}
+$SSH sudo chown -R ada:ada /opt/adado
 
 # ----------------------------------------------------------------
 # 3. Copy harness files
 # ----------------------------------------------------------------
 echo "[3/6] Copying AdaDo harness..."
-$SCP -r "$ADADO_DIR/harness/docker-compose.yml"    root@"$VPS_IP":/opt/adado/harness/
-$SCP -r "$ADADO_DIR/harness/docker-compose.override.yml" root@"$VPS_IP":/opt/adado/harness/ 2>/dev/null || true
-$SCP -r "$ADADO_DIR/harness/nginx.conf"            root@"$VPS_IP":/opt/adado/harness/
-$SCP -r "$ADADO_DIR/harness/.env.example"          root@"$VPS_IP":/opt/adado/harness/
-$SCP -r "$ADADO_DIR/apps"                          root@"$VPS_IP":/opt/adado/
-$SCP -r "$ADADO_DIR/agents"                        root@"$VPS_IP":/opt/adado/
-[ -d "$ADADO_DIR/core" ] && $SCP -r "$ADADO_DIR/core" root@"$VPS_IP":/opt/adado/ || true
+$SCP -r "$ADADO_DIR/harness/docker-compose.yml"    "${SSH_USER}@${VPS_IP}":/opt/adado/harness/
+$SCP -r "$ADADO_DIR/harness/docker-compose.override.yml" "${SSH_USER}@${VPS_IP}":/opt/adado/harness/ 2>/dev/null || true
+$SCP -r "$ADADO_DIR/harness/nginx.conf"            "${SSH_USER}@${VPS_IP}":/opt/adado/harness/
+$SCP -r "$ADADO_DIR/harness/.env.example"          "${SSH_USER}@${VPS_IP}":/opt/adado/harness/
+$SCP -r "$ADADO_DIR/apps"                          "${SSH_USER}@${VPS_IP}":/opt/adado/
+$SCP -r "$ADADO_DIR/agents"                        "${SSH_USER}@${VPS_IP}":/opt/adado/
+[ -d "$ADADO_DIR/core" ] && $SCP -r "$ADADO_DIR/core" "${SSH_USER}@${VPS_IP}":/opt/adado/ || true
 echo "  done."
 
 # ----------------------------------------------------------------
@@ -68,7 +72,7 @@ ADADO_DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))
 FIREFLY_APP_KEY=$(python3 -c "import secrets; print(secrets.token_hex(16))")
 
 # Write .env — API key left as placeholder; update before first run
-$SSH "cat > /opt/adado/harness/.env" << ENVEOF
+$SSH "tee /opt/adado/harness/.env > /dev/null" << ENVEOF
 # AdaDo Production Environment
 # Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # IMPORTANT: Set ANTHROPIC_API_KEY before starting services
@@ -112,7 +116,7 @@ echo "  done. (Update ANTHROPIC_API_KEY before starting)"
 # 5. Configure nginx + copy website
 # ----------------------------------------------------------------
 echo "[5/6] Configuring nginx..."
-$SSH bash << REMOTE
+$SSH sudo bash << REMOTE
 set -e
 cat > /etc/nginx/sites-available/adado << 'NGINX'
 server {
@@ -156,16 +160,18 @@ REMOTE
 
 # Copy website files
 echo "  Copying website..."
-$SSH mkdir -p /var/www/adado
-$SCP -r /var/www/adado/* root@"$VPS_IP":/var/www/adado/
-$SSH chown -R www-data:www-data /var/www/adado
+$SSH sudo mkdir -p /var/www/adado
+if [ -d /var/www/adado ] && [ "$(ls -A /var/www/adado 2>/dev/null)" ]; then
+    $SCP -r /var/www/adado/* "${SSH_USER}@${VPS_IP}":/var/www/adado/
+fi
+$SSH sudo chown -R www-data:www-data /var/www/adado
 echo "  done."
 
 # ----------------------------------------------------------------
 # 6. Start AdaDo core stack
 # ----------------------------------------------------------------
 echo "[6/6] Starting AdaDo core stack..."
-$SSH bash << 'REMOTE'
+$SSH bash -l << 'REMOTE'
 set -e
 cd /opt/adado/harness
 
@@ -197,8 +203,8 @@ echo "  Next steps:"
 echo "    1. Point adadoai.com A record to $VPS_IP"
 echo "    2. Set ANTHROPIC_API_KEY in /opt/adado/harness/.env"
 echo "    3. Get SSL cert:"
-echo "         ssh root@$VPS_IP"
-echo "         certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m dan@diginoz.com.au"
+echo "         ssh ${SSH_USER}@$VPS_IP"
+echo "         sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m dan@diginoz.com.au"
 echo "    4. Restart stack: cd /opt/adado/harness && docker compose --profile core restart"
 echo "    5. Verify: curl -s https://$DOMAIN/api/health"
 echo ""
