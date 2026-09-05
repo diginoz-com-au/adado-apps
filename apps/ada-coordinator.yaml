@@ -6,6 +6,7 @@ name: Ada Coordinator
 description: The central dispatcher for AdaDo. Parses user intent, routes to the right app agent, coordinates multi-step workflows, and confirms before irreversible actions.
 short_description: "Routes every request to the right agent"
 category: core
+market_leader: "LangGraph"
 homepage_tile: false
 icon: 🧭
 docker_profile: core
