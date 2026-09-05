@@ -8,6 +8,7 @@ category: productivity
 icon: 📝
 tier: 2
 coming_soon: true
+market_leader: "Notion"
 agent:
   id: notion-agent
   display_name: "Notion"

@@ -8,6 +8,7 @@ category: lifestyle
 icon: 🎵
 tier: 2
 coming_soon: true
+market_leader: "Spotify"
 agent:
   id: spotify-agent
   display_name: "Spotify"

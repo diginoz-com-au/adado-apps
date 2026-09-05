@@ -8,6 +8,7 @@ category: communication
 icon: 💬
 tier: 2
 coming_soon: true
+market_leader: "WhatsApp"
 agent:
   id: whatsapp-agent
   display_name: "WhatsApp"

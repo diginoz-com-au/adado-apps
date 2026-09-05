@@ -8,6 +8,7 @@ category: productivity
 icon: 📆
 tier: 2
 coming_soon: true
+market_leader: "Apple Calendar"
 agent:
   id: apple-calendar-agent
   display_name: "Apple Calendar"

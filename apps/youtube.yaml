@@ -8,6 +8,7 @@ category: social
 icon: 🎬
 tier: 2
 coming_soon: true
+market_leader: "YouTube"
 agent:
   id: youtube-agent
   display_name: "YouTube"

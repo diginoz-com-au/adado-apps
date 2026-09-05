@@ -8,6 +8,7 @@ category: ecommerce
 icon: 🛒
 tier: 2
 coming_soon: true
+market_leader: "Shopify"
 agent:
   id: shopify-agent
   display_name: "Shopify"

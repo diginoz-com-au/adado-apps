@@ -8,6 +8,7 @@ category: productivity
 icon: 📁
 tier: 2
 coming_soon: true
+market_leader: "Google Drive"
 agent:
   id: google-drive-agent
   display_name: "Google Drive"

@@ -8,6 +8,7 @@ category: productivity
 icon: ✅
 tier: 2
 coming_soon: true
+market_leader: "Todoist"
 agent:
   id: todoist-agent
   display_name: "Todoist"

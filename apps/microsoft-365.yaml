@@ -8,6 +8,7 @@ category: productivity
 icon: 🪟
 tier: 2
 coming_soon: true
+market_leader: "Microsoft 365"
 agent:
   id: microsoft-365-agent
   display_name: "Microsoft 365"

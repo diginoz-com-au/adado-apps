@@ -8,6 +8,7 @@ category: developer
 icon: 🐙
 tier: 2
 coming_soon: true
+market_leader: "GitHub"
 agent:
   id: github-agent
   display_name: "GitHub"

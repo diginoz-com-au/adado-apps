@@ -8,6 +8,7 @@ category: social
 icon: 📸
 tier: 2
 coming_soon: true
+market_leader: "Instagram"
 agent:
   id: instagram-agent
   display_name: "Instagram"
