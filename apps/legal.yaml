@@ -8,6 +8,7 @@ category: productivity
 icon: ⚖️
 tier: 2
 coming_soon: false
+market_leader: "Harvey"
 agent:
   id: legal-agent
   display_name: "Legal"
